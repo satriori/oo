@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rekomendasi Makanan dan Minuman Anak Kost di Purwokerto (Versi Super)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#94a3b8;--accent:#06b6d4;--glass:rgba(255,255,255,0.03)}
+    *{box-sizing:border-box;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{margin:0;background:linear-gradient(180deg,#071024 0%, #071a2a 100%);color:#e6eef6;min-height:100vh}
+    .wrap{max-width:1200px;margin:20px auto;padding:18px}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:12px}
+    .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,#06b6d4,#7c3aed);display:flex;align-items:center;justify-content:center;font-weight:800;color:#021124}
+    h1{margin:0;font-size:18px}
+    p.lead{margin:2px 0 0;color:var(--muted);font-size:13px}
+    .controls{display:grid;grid-template-columns:1fr 380px;gap:12px;margin-bottom:12px}
+    .card{background:var(--card);border-radius:12px;padding:12px;box-shadow:0 6px 20px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03)}
+    .search{display:flex;gap:8px}
+    .search input,.search select{flex:1;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:var(--glass);color:inherit}
+    .search button{padding:10px 14px;border-radius:10px;background:var(--accent);border:none;color:#021124;font-weight:600;cursor:pointer}
+    .filters{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+    .filters select,.filters input{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    .right-panel{display:flex;flex-direction:column;gap:10px}
+    .small{font-size:13px;color:var(--muted)}
+    .list{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px}
+    .place{padding:10px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));display:flex;gap:10px;align-items:flex-start}
+    .thumbnail{width:64px;height:64px;border-radius:10px;background:#082032;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--muted)}
+    .meta{flex:1}
+    .meta h3{margin:0 0 4px 0;font-size:15px}
+    .meta p{margin:0;font-size:13px;color:var(--muted)}
+    .meta .attrs{display:flex;gap:8px;margin-top:8px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+    .actions{display:flex;flex-direction:column;gap:8px}
+    .btn{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;text-decoration:none;text-align:center;cursor:pointer}
+    .btn.primary{background:var(--accent);color:#021124;border:none}
+    #map{height:360px;border-radius:12px;margin-top:12px;border:1px solid rgba(255,255,255,0.04)}
+    footer{margin-top:12px;color:var(--muted);font-size:12px}
+    @media(max-width:900px){.controls{grid-template-columns:1fr} .right-panel{order:2}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">MP</div>
+    <div>
+      <h1>Rekomendasi Makanan dan Minuman Untuk Anak Kost Di Kabupaten Banyumas</h1>
+      <p class="lead">Lokasi otomatis, peta interaktif, dan semua tempat diurutkan berdasarkan jarak.</p>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="card">
+      <div class="search">
+        <input id="q" placeholder="Cari nama tempat / menu..." />
+        <button id="useLoc" class="btn primary" title="Gunakan lokasi otomatis">Gunakan Lokasi</button>
+      </div>
+
+      <div class="filters">
+        <select id="foodType">
+          <option value="all">Semua Jenis Makanan</option>
+        </select>
+
+        <select id="sortBy">
+          <option value="distance">Urut: Terdekat</option>
+          <option value="recommend">Rekomendasi (rating)</option>
+          <option value="price_asc">Harga: Terendah</option>
+          <option value="price_desc">Harga: Tertinggi</option>
+        </select>
+
+        <input id="minPrice" type="number" placeholder="Min Harga (Rp)" />
+        <input id="maxPrice" type="number" placeholder="Max Harga (Rp)" />
+
+        <div style="margin-left:auto" class="small">Lokasi: <span id="locText">Mencari lokasi...</span></div>
+      </div>
+
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button id="apply" class="btn primary">Tampilkan Rekomendasi</button>
+        <button id="reset" class="btn">Reset Filter</button>
+      </div>
+
+      <div id="map" class="card"></div>
+    </div>
+
+    <aside class="right-panel">
+      <div class="card small">
+        <strong>Ringkasan</strong>
+        <div style="margin-top:8px">Total tempat dalam database: <span id="totalCount">123</span></div>
+        <div style="margin-top:6px">Kategori lengkap tersedia — gunakan pencarian / filter untuk mempersempit hasil.</div>
+      </div>
+
+      <div class="card small">
+        <strong>Favorit</strong>
+        <div id="favList" style="margin-top:8px;color:var(--muted)">Belum ada favorit.</div>
+      </div>
+    </aside>
+  </div>
+
+  <section>
+    <div id="results" class="list"></div>
+  </section>
+
+  <footer>Catatan: nama tempat adalah gabungan daftar nyata populer dan nama lokal. Jika ada yang ingin kamu ubah (koordinat, nama, atau hilangkan), beri tahu saya untuk penyesuaian.</footer>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const PLACES = [{"id": 1000, "name": "Ayam Geprek Juara", "category": "Ayam Geprek", "price": 13000, "rating": 4.3, "addr": "Alamat Ayam Geprek Juara, Purwokerto", "lat": -7.428648, "lng": 109.216003}, {"id": 1001, "name": "Ayam Geprek Mas Mian", "category": "Ayam Geprek", "price": 25000, "rating": 4.1, "addr": "Alamat Ayam Geprek Mas Mian, Purwokerto", "lat": -7.413521, "lng": 109.254468}, {"id": 1002, "name": "Ayam Geprek BAE", "category": "Ayam Geprek", "price": 10000, "rating": 4.4, "addr": "Alamat Ayam Geprek BAE, Purwokerto", "lat": -7.425016, "lng": 109.267113}, {"id": 1003, "name": "Ayam Geprek Pak Jaya", "category": "Ayam Geprek", "price": 11000, "rating": 4.6, "addr": "Alamat Ayam Geprek Pak Jaya, Purwokerto", "lat": -7.435786, "lng": 109.2236}, {"id": 1004, "name": "Ayam Geprek Sai", "category": "Ayam Geprek", "price": 20000, "rating": 4.2, "addr": "Alamat Ayam Geprek Sai, Purwokerto", "lat": -7.445549, "lng": 109.272765}, {"id": 1005, "name": "Ayam Geprek Pak Eko", "category": "Ayam Geprek", "price": 10000, "rating": 4.3, "addr": "Alamat Ayam Geprek Pak Eko, Purwokerto", "lat": -7.419281, "lng": 109.222082}, {"id": 1006, "name": "Ayam Geprek Bu Siti", "category": "Ayam Geprek", "price": 12000, "rating": 4.6, "addr": "Alamat Ayam Geprek Bu Siti, Purwokerto", "lat": -7.440755, "lng": 109.250045}, {"id": 1007, "name": "Ayam Geprek Mbok Rahayu", "category": "Ayam Geprek", "price": 13000, "rating": 4.2, "addr": "Alamat Ayam Geprek Mbok Rahayu, Purwokerto", "lat": -7.421589, "lng": 109.224145}, {"id": 1008, "name": "Ayam Geprek Rakyat", "category": "Ayam Geprek", "price": 9000, "rating": 3.9, "addr": "Alamat Ayam Geprek Rakyat, Purwokerto", "lat": -7.428021, "lng": 109.251758}, {"id": 1009, "name": "Ayam Geprek Sambal Ijo", "category": "Ayam Geprek", "price": 11000, "rating": 4.3, "addr": "Alamat Ayam Geprek Sambal Ijo, Purwokerto", "lat": -7.446705, "lng": 109.239525}, {"id": 1010, "name": "Ayam Geprek Lamongan", "category": "Ayam Geprek", "price": 14000, "rating": 4.0, "addr": "Alamat Ayam Geprek Lamongan, Purwokerto", "lat": -7.441304, "lng": 109.229596}, {"id": 1011, "name": "Ayam Geprek Joss", "category": "Ayam Geprek", "price": 18000, "rating": 4.5, "addr": "Alamat Ayam Geprek Joss, Purwokerto", "lat": -7.424512, "lng": 109.243316}, {"id": 1012, "name": "Bakso Pekih", "category": "Bakso", "price": 9000, "rating": 4.0, "addr": "Alamat Bakso Pekih, Purwokerto", "lat": -7.443816, "lng": 109.261421}, {"id": 1013, "name": "Bakso & Soto Sami Asih", "category": "Bakso", "price": 20000, "rating": 4.3, "addr": "Alamat Bakso & Soto Sami Asih, Purwokerto", "lat": -7.435201, "lng": 109.266273}, {"id": 1014, "name": "Bakso Pak Hadi", "category": "Bakso", "price": 15000, "rating": 3.9, "addr": "Alamat Bakso Pak Hadi, Purwokerto", "lat": -7.430154, "lng": 109.221901}, {"id": 1015, "name": "Bakso Malang Cak Mat", "category": "Bakso", "price": 18000, "rating": 4.1, "addr": "Alamat Bakso Malang Cak Mat, Purwokerto", "lat": -7.448058, "lng": 109.213241}, {"id": 1016, "name": "Bakso Raksasa Beranak", "category": "Bakso", "price": 20000, "rating": 4.5, "addr": "Alamat Bakso Raksasa Beranak, Purwokerto", "lat": -7.41711, "lng": 109.216425}, {"id": 1017, "name": "Bakso Sehan", "category": "Bakso", "price": 7000, "rating": 4.5, "addr": "Alamat Bakso Sehan, Purwokerto", "lat": -7.44472, "lng": 109.253393}, {"id": 1018, "name": "Bakso Joni", "category": "Bakso", "price": 14000, "rating": 4.1, "addr": "Alamat Bakso Joni, Purwokerto", "lat": -7.427994, "lng": 109.222945}, {"id": 1019, "name": "Bakso Gendut Putro", "category": "Bakso", "price": 15000, "rating": 4.0, "addr": "Alamat Bakso Gendut Putro, Purwokerto", "lat": -7.431623, "lng": 109.225951}, {"id": 1020, "name": "Bakso Pak Kardi", "category": "Bakso", "price": 25000, "rating": 4.6, "addr": "Alamat Bakso Pak Kardi, Purwokerto", "lat": -7.436809, "lng": 109.267647}, {"id": 1021, "name": "Bakso Pekan", "category": "Bakso", "price": 13000, "rating": 4.7, "addr": "Alamat Bakso Pekan, Purwokerto", "lat": -7.424326, "lng": 109.264769}, {"id": 1022, "name": "Bakso Tetelan Pak Hadi", "category": "Bakso", "price": 15000, "rating": 3.9, "addr": "Alamat Bakso Tetelan Pak Hadi, Purwokerto", "lat": -7.413616, "lng": 109.23397}, {"id": 1023, "name": "Bakso Oskab Ngalam", "category": "Bakso", "price": 11000, "rating": 4.3, "addr": "Alamat Bakso Oskab Ngalam, Purwokerto", "lat": -7.447094, "lng": 109.249481}, {"id": 1024, "name": "RM Sroto (Soto Sokaraja)", "category": "Soto", "price": 14000, "rating": 3.8, "addr": "Alamat RM Sroto (Soto Sokaraja), Purwokerto", "lat": -7.446005, "lng": 109.248271}, {"id": 1025, "name": "Raja Soto Lama H. Suradi", "category": "Soto", "price": 9000, "rating": 4.8, "addr": "Alamat Raja Soto Lama H. Suradi, Purwokerto", "lat": -7.441746, "lng": 109.26804}, {"id": 1026, "name": "Soto Sokaraja Pak Darto", "category": "Soto", "price": 12000, "rating": 3.8, "addr": "Alamat Soto Sokaraja Pak Darto, Purwokerto", "lat": -7.430711, "lng": 109.218986}, {"id": 1027, "name": "Soto & Bakso Campur Pak Darto", "category": "Soto", "price": 13000, "rating": 4.5, "addr": "Alamat Soto & Bakso Campur Pak Darto, Purwokerto", "lat": -7.425729, "lng": 109.242503}, {"id": 1028, "name": "Soto Lamongan Hj. Nur", "category": "Soto", "price": 15000, "rating": 3.8, "addr": "Alamat Soto Lamongan Hj. Nur, Purwokerto", "lat": -7.440364, "lng": 109.236061}, {"id": 1029, "name": "Soto Sokaraja Legendaris", "category": "Soto", "price": 20000, "rating": 4.1, "addr": "Alamat Soto Sokaraja Legendaris, Purwokerto", "lat": -7.428983, "lng": 109.268398}, {"id": 1030, "name": "Soto Sedap Pak Salim", "category": "Soto", "price": 25000, "rating": 4.2, "addr": "Alamat Soto Sedap Pak Salim, Purwokerto", "lat": -7.419964, "lng": 109.231271}, {"id": 1031, "name": "RM Soto Pak Gito", "category": "Soto", "price": 10000, "rating": 3.9, "addr": "Alamat RM Soto Pak Gito, Purwokerto", "lat": -7.417254, "lng": 109.234756}, {"id": 1032, "name": "Soto Pak Raji", "category": "Soto", "price": 9000, "rating": 4.7, "addr": "Alamat Soto Pak Raji, Purwokerto", "lat": -7.418166, "lng": 109.224548}, {"id": 1033, "name": "Soto Semesta", "category": "Soto", "price": 11000, "rating": 4.0, "addr": "Alamat Soto Semesta, Purwokerto", "lat": -7.421628, "lng": 109.224572}, {"id": 1034, "name": "Mie Ayam Cak Rudi", "category": "Mie Ayam", "price": 18000, "rating": 4.6, "addr": "Alamat Mie Ayam Cak Rudi, Purwokerto", "lat": -7.428792, "lng": 109.228979}, {"id": 1035, "name": "Bakmi Jawa Mbah Supar", "category": "Mie Ayam", "price": 11000, "rating": 4.6, "addr": "Alamat Bakmi Jawa Mbah Supar, Purwokerto", "lat": -7.430084, "lng": 109.266509}, {"id": 1036, "name": "Mie Ayam Pak Man", "category": "Mie Ayam", "price": 25000, "rating": 4.1, "addr": "Alamat Mie Ayam Pak Man, Purwokerto", "lat": -7.442589, "lng": 109.222992}, {"id": 1037, "name": "Mie Ayam Tegal", "category": "Mie Ayam", "price": 18000, "rating": 4.4, "addr": "Alamat Mie Ayam Tegal, Purwokerto", "lat": -7.438005, "lng": 109.220069}, {"id": 1038, "name": "Bakmi Pangsit Ayu", "category": "Mie Ayam", "price": 12000, "rating": 4.2, "addr": "Alamat Bakmi Pangsit Ayu, Purwokerto", "lat": -7.414299, "lng": 109.240137}, {"id": 1039, "name": "Mie Ayam Pak Rinto", "category": "Mie Ayam", "price": 9000, "rating": 4.7, "addr": "Alamat Mie Ayam Pak Rinto, Purwokerto", "lat": -7.44835, "lng": 109.224829}, {"id": 1040, "name": "Mie Ayam Ceker Pak Man", "category": "Mie Ayam", "price": 13000, "rating": 4.1, "addr": "Alamat Mie Ayam Ceker Pak Man, Purwokerto", "lat": -7.441487, "lng": 109.240301}, {"id": 1041, "name": "Mie Kuah Mbah Joko", "category": "Mie Ayam", "price": 20000, "rating": 4.1, "addr": "Alamat Mie Kuah Mbah Joko, Purwokerto", "lat": -7.415372, "lng": 109.245804}, {"id": 1042, "name": "Mie Ayam Solo", "category": "Mie Ayam", "price": 18000, "rating": 4.2, "addr": "Alamat Mie Ayam Solo, Purwokerto", "lat": -7.449875, "lng": 109.23659}, {"id": 1043, "name": "Mie Ayam Madura", "category": "Mie Ayam", "price": 9000, "rating": 4.5, "addr": "Alamat Mie Ayam Madura, Purwokerto", "lat": -7.430247, "lng": 109.248758}, {"id": 1044, "name": "Warteg Enak", "category": "Warteg", "price": 9000, "rating": 4.1, "addr": "Alamat Warteg Enak, Purwokerto", "lat": -7.420652, "lng": 109.260683}, {"id": 1045, "name": "Warteg Ekasari", "category": "Warteg", "price": 20000, "rating": 4.0, "addr": "Alamat Warteg Ekasari, Purwokerto", "lat": -7.436281, "lng": 109.215986}, {"id": 1046, "name": "Warteg Pasar Wage", "category": "Warteg", "price": 9000, "rating": 4.5, "addr": "Alamat Warteg Pasar Wage, Purwokerto", "lat": -7.420442, "lng": 109.222326}, {"id": 1047, "name": "Warteg Juju", "category": "Warteg", "price": 18000, "rating": 4.8, "addr": "Alamat Warteg Juju, Purwokerto", "lat": -7.44148, "lng": 109.254282}, {"id": 1048, "name": "Warteg Dapur Bu Ida", "category": "Warteg", "price": 25000, "rating": 4.5, "addr": "Alamat Warteg Dapur Bu Ida, Purwokerto", "lat": -7.425691, "lng": 109.240759}, {"id": 1049, "name": "Warteg Pak Slamet", "category": "Warteg", "price": 25000, "rating": 3.9, "addr": "Alamat Warteg Pak Slamet, Purwokerto", "lat": -7.425279, "lng": 109.220552}, {"id": 1050, "name": "Warteg Bu Dewi", "category": "Warteg", "price": 18000, "rating": 4.0, "addr": "Alamat Warteg Bu Dewi, Purwokerto", "lat": -7.447786, "lng": 109.218899}, {"id": 1051, "name": "Warteg Kramat", "category": "Warteg", "price": 12000, "rating": 4.4, "addr": "Alamat Warteg Kramat, Purwokerto", "lat": -7.419422, "lng": 109.269577}, {"id": 1052, "name": "Warteg Pasar Tradisional", "category": "Warteg", "price": 25000, "rating": 4.8, "addr": "Alamat Warteg Pasar Tradisional, Purwokerto", "lat": -7.433027, "lng": 109.27134}, {"id": 1053, "name": "Warteg Kampus", "category": "Warteg", "price": 15000, "rating": 4.6, "addr": "Alamat Warteg Kampus, Purwokerto", "lat": -7.446035, "lng": 109.231195}, {"id": 1054, "name": "Warteg Sederhana", "category": "Warteg", "price": 15000, "rating": 4.2, "addr": "Alamat Warteg Sederhana, Purwokerto", "lat": -7.422288, "lng": 109.219129}, {"id": 1055, "name": "Warteg Mendoan", "category": "Warteg", "price": 20000, "rating": 4.2, "addr": "Alamat Warteg Mendoan, Purwokerto", "lat": -7.441302, "lng": 109.262767}, {"id": 1056, "name": "Nasi Pecel Mbah Sastro", "category": "Pecel", "price": 12000, "rating": 4.6, "addr": "Alamat Nasi Pecel Mbah Sastro, Purwokerto", "lat": -7.41944, "lng": 109.252538}, {"id": 1057, "name": "Nasi Pecel Bu Siti", "category": "Pecel", "price": 13000, "rating": 4.3, "addr": "Alamat Nasi Pecel Bu Siti, Purwokerto", "lat": -7.411405, "lng": 109.260181}, {"id": 1058, "name": "Pecel & Lalapan Pak Slamet", "category": "Pecel", "price": 12000, "rating": 4.0, "addr": "Alamat Pecel & Lalapan Pak Slamet, Purwokerto", "lat": -7.413826, "lng": 109.25034}, {"id": 1059, "name": "Pecel Pak Warno", "category": "Pecel", "price": 13000, "rating": 3.9, "addr": "Alamat Pecel Pak Warno, Purwokerto", "lat": -7.419321, "lng": 109.226196}, {"id": 1060, "name": "Pecel Pak Eko", "category": "Pecel", "price": 11000, "rating": 4.6, "addr": "Alamat Pecel Pak Eko, Purwokerto", "lat": -7.411616, "lng": 109.225343}, {"id": 1061, "name": "Pecel Legendaris", "category": "Pecel", "price": 11000, "rating": 4.5, "addr": "Alamat Pecel Legendaris, Purwokerto", "lat": -7.423308, "lng": 109.25197}, {"id": 1062, "name": "Lalapan & Gorengan Mbak Ita", "category": "Lalapan", "price": 14000, "rating": 4.5, "addr": "Alamat Lalapan & Gorengan Mbak Ita, Purwokerto", "lat": -7.445527, "lng": 109.218029}, {"id": 1063, "name": "Ayam Goreng & Lalapan Mbak Ria", "category": "Lalapan", "price": 14000, "rating": 4.8, "addr": "Alamat Ayam Goreng & Lalapan Mbak Ria, Purwokerto", "lat": -7.423214, "lng": 109.231978}, {"id": 1064, "name": "Lalapan Pak Bondan", "category": "Lalapan", "price": 15000, "rating": 4.7, "addr": "Alamat Lalapan Pak Bondan, Purwokerto", "lat": -7.43883, "lng": 109.255277}, {"id": 1065, "name": "Lalapan Nikmat Bu Lili", "category": "Lalapan", "price": 15000, "rating": 4.0, "addr": "Alamat Lalapan Nikmat Bu Lili, Purwokerto", "lat": -7.431687, "lng": 109.232945}, {"id": 1066, "name": "Lalapan Kencana", "category": "Lalapan", "price": 20000, "rating": 4.5, "addr": "Alamat Lalapan Kencana, Purwokerto", "lat": -7.421673, "lng": 109.222088}, {"id": 1067, "name": "Angkringan Malam Purwokerto", "category": "Angkringan", "price": 12000, "rating": 4.5, "addr": "Alamat Angkringan Malam Purwokerto, Purwokerto", "lat": -7.412449, "lng": 109.265831}, {"id": 1068, "name": "Angkringan Kopi Jos", "category": "Angkringan", "price": 25000, "rating": 4.0, "addr": "Alamat Angkringan Kopi Jos, Purwokerto", "lat": -7.447533, "lng": 109.254896}, {"id": 1069, "name": "Angkringan Pak Slamet", "category": "Angkringan", "price": 14000, "rating": 4.3, "addr": "Alamat Angkringan Pak Slamet, Purwokerto", "lat": -7.416276, "lng": 109.261722}, {"id": 1070, "name": "Angkringan Nongkrong", "category": "Angkringan", "price": 14000, "rating": 4.2, "addr": "Alamat Angkringan Nongkrong, Purwokerto", "lat": -7.431855, "lng": 109.272171}, {"id": 1071, "name": "Martabak Bang Udin", "category": "Martabak", "price": 14000, "rating": 4.3, "addr": "Alamat Martabak Bang Udin, Purwokerto", "lat": -7.440929, "lng": 109.240592}, {"id": 1072, "name": "Martabak Maestro", "category": "Martabak", "price": 20000, "rating": 3.9, "addr": "Alamat Martabak Maestro, Purwokerto", "lat": -7.428802, "lng": 109.244495}, {"id": 1073, "name": "Martabak PLetok", "category": "Martabak", "price": 15000, "rating": 4.6, "addr": "Alamat Martabak PLetok, Purwokerto", "lat": -7.416031, "lng": 109.22767}, {"id": 1074, "name": "Martabak Murni", "category": "Martabak", "price": 25000, "rating": 3.9, "addr": "Alamat Martabak Murni, Purwokerto", "lat": -7.419903, "lng": 109.217579}, {"id": 1075, "name": "Sate Kambing H. Dul", "category": "Sate", "price": 9000, "rating": 4.6, "addr": "Alamat Sate Kambing H. Dul, Purwokerto", "lat": -7.428352, "lng": 109.230928}, {"id": 1076, "name": "Sate Madura Pak Slamet", "category": "Sate", "price": 9000, "rating": 4.8, "addr": "Alamat Sate Madura Pak Slamet, Purwokerto", "lat": -7.417901, "lng": 109.241404}, {"id": 1077, "name": "Sate Ayam Pak Kasno", "category": "Sate", "price": 11000, "rating": 4.2, "addr": "Alamat Sate Ayam Pak Kasno, Purwokerto", "lat": -7.443923, "lng": 109.249396}, {"id": 1078, "name": "Sate Blater", "category": "Sate", "price": 9000, "rating": 4.6, "addr": "Alamat Sate Blater, Purwokerto", "lat": -7.43295, "lng": 109.270498}, {"id": 1079, "name": "Sate Klathak Purwokerto", "category": "Sate", "price": 15000, "rating": 4.1, "addr": "Alamat Sate Klathak Purwokerto, Purwokerto", "lat": -7.419045, "lng": 109.226711}, {"id": 1080, "name": "Sate Pak Johan", "category": "Sate", "price": 14000, "rating": 4.7, "addr": "Alamat Sate Pak Johan, Purwokerto", "lat": -7.415783, "lng": 109.27002}, {"id": 1081, "name": "Sate Pak Eko", "category": "Sate", "price": 18000, "rating": 4.3, "addr": "Alamat Sate Pak Eko, Purwokerto", "lat": -7.42767, "lng": 109.247301}, {"id": 1082, "name": "Nasi Goreng Pak Slamet", "category": "Nasi Goreng", "price": 7000, "rating": 4.0, "addr": "Alamat Nasi Goreng Pak Slamet, Purwokerto", "lat": -7.423257, "lng": 109.259237}, {"id": 1083, "name": "Nasi Goreng Kafe Malam", "category": "Nasi Goreng", "price": 7000, "rating": 4.7, "addr": "Alamat Nasi Goreng Kafe Malam, Purwokerto", "lat": -7.438877, "lng": 109.215736}, {"id": 1084, "name": "Nasi Goreng Spesial Bu Sari", "category": "Nasi Goreng", "price": 9000, "rating": 4.2, "addr": "Alamat Nasi Goreng Spesial Bu Sari, Purwokerto", "lat": -7.447089, "lng": 109.222729}, {"id": 1085, "name": "Nasi Goreng Jumbo", "category": "Nasi Goreng", "price": 15000, "rating": 4.7, "addr": "Alamat Nasi Goreng Jumbo, Purwokerto", "lat": -7.44553, "lng": 109.231743}, {"id": 1086, "name": "Bebek Goreng Pak Jaya", "category": "Bebek/Ayam Bakar", "price": 14000, "rating": 4.6, "addr": "Alamat Bebek Goreng Pak Jaya, Purwokerto", "lat": -7.422276, "lng": 109.218235}, {"id": 1087, "name": "Ayam Bakar Taliwang Purwokerto", "category": "Bebek/Ayam Bakar", "price": 15000, "rating": 4.1, "addr": "Alamat Ayam Bakar Taliwang Purwokerto, Purwokerto", "lat": -7.411837, "lng": 109.237337}, {"id": 1088, "name": "Bebek Bakul", "category": "Bebek/Ayam Bakar", "price": 30000, "rating": 4.4, "addr": "Alamat Bebek Bakul, Purwokerto", "lat": -7.433113, "lng": 109.227736}, {"id": 1089, "name": "Ayam Bakar Madu Bu Rini", "category": "Bebek/Ayam Bakar", "price": 18000, "rating": 4.0, "addr": "Alamat Ayam Bakar Madu Bu Rini, Purwokerto", "lat": -7.446303, "lng": 109.221343}, {"id": 1090, "name": "Rawon Setan Mini", "category": "Rawon", "price": 13000, "rating": 4.0, "addr": "Alamat Rawon Setan Mini, Purwokerto", "lat": -7.410841, "lng": 109.250224}, {"id": 1091, "name": "Rawon Mak Nyak", "category": "Rawon", "price": 14000, "rating": 4.2, "addr": "Alamat Rawon Mak Nyak, Purwokerto", "lat": -7.425132, "lng": 109.249101}, {"id": 1092, "name": "Rawon Pak Surya", "category": "Rawon", "price": 14000, "rating": 4.1, "addr": "Alamat Rawon Pak Surya, Purwokerto", "lat": -7.417474, "lng": 109.227322}, {"id": 1093, "name": "Seafood Kita", "category": "Seafood", "price": 15000, "rating": 4.4, "addr": "Alamat Seafood Kita, Purwokerto", "lat": -7.413936, "lng": 109.253242}, {"id": 1094, "name": "Restoran Laut Purwokerto", "category": "Seafood", "price": 7000, "rating": 4.7, "addr": "Alamat Restoran Laut Purwokerto, Purwokerto", "lat": -7.440988, "lng": 109.255354}, {"id": 1095, "name": "Seafood Pak Guntur", "category": "Seafood", "price": 10000, "rating": 4.2, "addr": "Alamat Seafood Pak Guntur, Purwokerto", "lat": -7.442317, "lng": 109.23555}, {"id": 1096, "name": "Kopi Nusantara Cafe", "category": "Cafe & Kopi", "price": 18000, "rating": 3.8, "addr": "Alamat Kopi Nusantara Cafe, Purwokerto", "lat": -7.438729, "lng": 109.238912}, {"id": 1097, "name": "Kedai Kopi Jendral", "category": "Cafe & Kopi", "price": 7000, "rating": 4.8, "addr": "Alamat Kedai Kopi Jendral, Purwokerto", "lat": -7.448803, "lng": 109.235905}, {"id": 1098, "name": "Coffee Corner Purwokerto", "category": "Cafe & Kopi", "price": 12000, "rating": 4.7, "addr": "Alamat Coffee Corner Purwokerto, Purwokerto", "lat": -7.434598, "lng": 109.224366}, {"id": 1099, "name": "Cafe Rasa", "category": "Cafe & Kopi", "price": 14000, "rating": 4.3, "addr": "Alamat Cafe Rasa, Purwokerto", "lat": -7.424817, "lng": 109.239647}, {"id": 1100, "name": "Kopi Luwak Corner", "category": "Cafe & Kopi", "price": 12000, "rating": 4.2, "addr": "Alamat Kopi Luwak Corner, Purwokerto", "lat": -7.420846, "lng": 109.257282}, {"id": 1101, "name": "Bean & Brew", "category": "Cafe & Kopi", "price": 20000, "rating": 4.0, "addr": "Alamat Bean & Brew, Purwokerto", "lat": -7.422622, "lng": 109.259783}, {"id": 1102, "name": "Ramen House Purwokerto", "category": "Ramen/Japanese", "price": 20000, "rating": 4.6, "addr": "Alamat Ramen House Purwokerto, Purwokerto", "lat": -7.42281, "lng": 109.257801}, {"id": 1103, "name": "Ramen & Bowl Coffee", "category": "Ramen/Japanese", "price": 18000, "rating": 4.1, "addr": "Alamat Ramen & Bowl Coffee, Purwokerto", "lat": -7.427724, "lng": 109.251221}, {"id": 1104, "name": "Tokyo Ramen Station", "category": "Ramen/Japanese", "price": 18000, "rating": 4.4, "addr": "Alamat Tokyo Ramen Station, Purwokerto", "lat": -7.450604, "lng": 109.262312}, {"id": 1105, "name": "Sushi & Ramen Kita", "category": "Ramen/Japanese", "price": 9000, "rating": 4.5, "addr": "Alamat Sushi & Ramen Kita, Purwokerto", "lat": -7.426964, "lng": 109.216354}, {"id": 1106, "name": "Rice Bowl Express", "category": "Rice Bowl/Dimsum", "price": 15000, "rating": 3.9, "addr": "Alamat Rice Bowl Express, Purwokerto", "lat": -7.45049, "lng": 109.242218}, {"id": 1107, "name": "Dimsum House", "category": "Rice Bowl/Dimsum", "price": 18000, "rating": 4.3, "addr": "Alamat Dimsum House, Purwokerto", "lat": -7.435885, "lng": 109.237454}, {"id": 1108, "name": "Bowl & Bao", "category": "Rice Bowl/Dimsum", "price": 14000, "rating": 4.1, "addr": "Alamat Bowl & Bao, Purwokerto", "lat": -7.429337, "lng": 109.268841}, {"id": 1109, "name": "Dimsum Purwokerto", "category": "Rice Bowl/Dimsum", "price": 18000, "rating": 3.9, "addr": "Alamat Dimsum Purwokerto, Purwokerto", "lat": -7.423494, "lng": 109.220083}, {"id": 1110, "name": "McDonald's Purwokerto", "category": "Fast Food", "price": 13000, "rating": 4.8, "addr": "Alamat McDonald's Purwokerto, Purwokerto", "lat": -7.437871, "lng": 109.265374}, {"id": 1111, "name": "KFC Purwokerto", "category": "Fast Food", "price": 9000, "rating": 4.7, "addr": "Alamat KFC Purwokerto, Purwokerto", "lat": -7.426934, "lng": 109.240355}, {"id": 1112, "name": "Burger King (lokal)", "category": "Fast Food", "price": 15000, "rating": 4.5, "addr": "Alamat Burger King (lokal), Purwokerto", "lat": -7.444739, "lng": 109.223907}, {"id": 1113, "name": "Warung Burger 88", "category": "Fast Food", "price": 15000, "rating": 4.2, "addr": "Alamat Warung Burger 88, Purwokerto", "lat": -7.429768, "lng": 109.263409}, {"id": 1114, "name": "FastFood Express", "category": "Fast Food", "price": 13000, "rating": 4.5, "addr": "Alamat FastFood Express, Purwokerto", "lat": -7.441104, "lng": 109.26836}, {"id": 1115, "name": "Pizza Corner", "category": "Western", "price": 18000, "rating": 4.4, "addr": "Alamat Pizza Corner, Purwokerto", "lat": -7.437971, "lng": 109.256529}, {"id": 1116, "name": "Steak House Purwokerto", "category": "Western", "price": 9000, "rating": 4.5, "addr": "Alamat Steak House Purwokerto, Purwokerto", "lat": -7.423756, "lng": 109.236756}, {"id": 1117, "name": "Spaghetti Mania", "category": "Western", "price": 18000, "rating": 4.3, "addr": "Alamat Spaghetti Mania, Purwokerto", "lat": -7.41127, "lng": 109.270096}, {"id": 1118, "name": "Western Grill", "category": "Western", "price": 25000, "rating": 4.2, "addr": "Alamat Western Grill, Purwokerto", "lat": -7.421115, "lng": 109.214298}, {"id": 1119, "name": "Es Krim Cantik", "category": "Dessert/Roti/Es Krim", "price": 30000, "rating": 4.6, "addr": "Alamat Es Krim Cantik, Purwokerto", "lat": -7.420379, "lng": 109.235292}, {"id": 1120, "name": "Roti Bakar Pak Slamet", "category": "Dessert/Roti/Es Krim", "price": 7000, "rating": 3.9, "addr": "Alamat Roti Bakar Pak Slamet, Purwokerto", "lat": -7.428095, "lng": 109.219329}, {"id": 1121, "name": "Dessert House", "category": "Dessert/Roti/Es Krim", "price": 15000, "rating": 4.1, "addr": "Alamat Dessert House, Purwokerto", "lat": -7.415421, "lng": 109.233271}, {"id": 1122, "name": "Cake & Coffee", "category": "Dessert/Roti/Es Krim", "price": 18000, "rating": 4.0, "addr": "Alamat Cake & Coffee, Purwokerto", "lat": -7.438507, "lng": 109.263997},
+{"id": 3000, "name": "Agathis Resto Baturraden", "category": "Restoran Alam", "price": 15000, "rating": 4.3, "addr": "Dusun II, Karangsalam, Baturraden, Banyumas", "lat": -7.303, "lng": 109.215},
+{"id": 3001, "name": "Orak Arik Resto & Park", "category": "Restoran & Cafe", "price": 28700, "rating": 4.2, "addr": "Gang Pancawati, Dusun II, Kemutug Kidul, Baturraden, Banyumas", "lat": -7.298, "lng": 109.212},
+{"id": 3002, "name": "Taman Langit Cafe", "category": "Cafe", "price": 10000, "rating": 4.4, "addr": "Jl. Raya Baturaden, Dusun I / II, Karangtengah, Baturraden, Banyumas", "lat": -7.300, "lng": 109.217},
+{"id": 3003, "name": "Massapi Cafe & Resto", "category": "Cafe & Resto", "price": 10000, "rating": 4.1, "addr": "Baturraden, Banyumas", "lat": -7.301, "lng": 109.216},
+{"id": 3004, "name": "Kedai Kopi Suluh Baturraden", "category": "Kafe Kopi", "price": 20000, "rating": 4.2, "addr": "Dusun I, Kemutug Kidul, Baturraden, Banyumas", "lat": -7.305, "lng": 109.214},
+{"id": 3005, "name": "Pringsewu Baturraden", "category": "Restoran", "price": 10000, "rating": 4.0, "addr": "Jl. Raya Baturaden Simpang 4, Karangmangu, Baturraden, Banyumas", "lat": -7.302, "lng": 109.213},
+{"id": 3006, "name": "Cerita Alam Restaurant", "category": "Restoran Alam", "price": 20000, "rating": 4.1, "addr": "Baturraden, Banyumas", "lat": -7.304, "lng": 109.216},
+{"id": 3007, "name": "Penak Mawon Cafe Baturraden", "category": "Cafe Alam", "price": 20000, "rating": 4.3, "addr": "Jl. Raya Kebumen, Baturraden, Banyumas", "lat": -7.299, "lng": 109.210},
+{"id": 3008, "name": "The Hill Resto Baturraden", "category": "Restoran", "price": 25000, "rating": 4.0, "addr": "Baturraden, Banyumas", "lat": -7.300, "lng": 109.218},
+{"id": 3009, "name": "Warung Putri Gunung", "category": "Warung / Restoran Tradisional", "price": 12000, "rating": 4.1, "addr": "Jl. Raya Desa Kemutug Lor, Dusun I, Kemutug Lor, Baturraden, Banyumas", "lat": -7.306, "lng": 109.214}, {"id": 5000, "name": "Soto Sokaraja Hj. Djoeminten", "category": "Soto", "price": 15000, "rating": 4.4, "addr": "Jl. Jend. Sudirman, Sokaraja", "lat": -7.4551, "lng": 109.2841},
+{"id": 5001, "name": "Mie Kelinci Sokaraja", "category": "Mie Ayam", "price": 12000, "rating": 4.2, "addr": "Jl. Raya Sokaraja", "lat": -7.4545, "lng": 109.2830},
+{"id": 5002, "name": "Es Krim Pak Kaslan", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Pasar Sokaraja", "lat": -7.4563, "lng": 109.2853},
+{"id": 5003, "name": "Ayam Goreng Mbok Berek Sokaraja", "category": "Ayam Goreng", "price": 20000, "rating": 4.2, "addr": "Jl. Soepardjo Roestam", "lat": -7.4559, "lng": 109.2829},
+{"id": 5004, "name": "Kupat Tahu Sokaraja Asli", "category": "Makanan Tradisional", "price": 10000, "rating": 4.3, "addr": "Jl. Jend. Sudirman", "lat": -7.4543, "lng": 109.2845},
+{"id": 5005, "name": "Waroeng Steak Sokaraja", "category": "Steak", "price": 25000, "rating": 4.1, "addr": "Jl. Raya Sokaraja", "lat": -7.4538, "lng": 109.2838},
+{"id": 5006, "name": "Angkringan Gajah Mada Sokaraja", "category": "Angkringan", "price": 7000, "rating": 4.2, "addr": "Gg. Gajah Mada", "lat": -7.4566, "lng": 109.2860},
+{"id": 5007, "name": "Bakso Pak Yanto Sokaraja", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Jl. Raya Sokaraja", "lat": -7.4552, "lng": 109.2834},
+{"id": 5008, "name": "Coffee Space Sokaraja", "category": "Cafe", "price": 20000, "rating": 4.3, "addr": "Sokaraja Tengah", "lat": -7.4539, "lng": 109.2849},
+{"id": 5009, "name": "Seafood Cak Dul Sokaraja", "category": "Seafood", "price": 30000, "rating": 4.1, "addr": "Sokaraja Kulon", "lat": -7.4569, "lng": 109.2872},
+
+{"id": 5010, "name": "Warung Lesehan Bu Wati", "category": "Lesehan", "price": 12000, "rating": 4.2, "addr": "Cilongok", "lat": -7.4181, "lng": 109.1602},
+{"id": 5011, "name": "Soto Ayam Pak Narto", "category": "Soto", "price": 10000, "rating": 4.1, "addr": "Cilongok", "lat": -7.4203, "lng": 109.1615},
+{"id": 5012, "name": "Bakso Mang Udin", "category": "Bakso", "price": 13000, "rating": 4.0, "addr": "Cilongok", "lat": -7.4198, "lng": 109.1601},
+{"id": 5013, "name": "Ayam Geprek Jogja Cilongok", "category": "Ayam Geprek", "price": 12000, "rating": 4.2, "addr": "Cilongok", "lat": -7.4212, "lng": 109.1628},
+{"id": 5014, "name": "Es Degan Mas Roni", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Cilongok", "lat": -7.4209, "lng": 109.1631},
+{"id": 5015, "name": "Angkringan Pak Dhe Cilongok", "category": "Angkringan", "price": 6000, "rating": 4.1, "addr": "Cilongok", "lat": -7.4193, "lng": 109.1610},
+{"id": 5016, "name": "Warung Kopi Kali Pucung", "category": "Cafe", "price": 15000, "rating": 4.4, "addr": "Cilongok", "lat": -7.4221, "lng": 109.1633},
+{"id": 5017, "name": "Mie Ayam Mas Gepeng", "category": "Mie Ayam", "price": 10000, "rating": 4.0, "addr": "Cilongok", "lat": -7.4187, "lng": 109.1620},
+{"id": 5018, "name": "Seafood Cumi Bakar Cilongok", "category": "Seafood", "price": 25000, "rating": 4.2, "addr": "Cilongok", "lat": -7.4210, "lng": 109.1609},
+{"id": 5019, "name": "Warung Sate Kambing Pak Gino", "category": "Sate", "price": 20000, "rating": 4.3, "addr": "Cilongok", "lat": -7.4200, "lng": 109.1625},
+
+{"id": 5020, "name": "Ayam Geprek Bu Rini Ajibarang", "category": "Ayam Geprek", "price": 12000, "rating": 4.2, "addr": "Ajibarang Kulon", "lat": -7.4880, "lng": 109.1015},
+{"id": 5021, "name": "Soto Ayam Wahyu Ajibarang", "category": "Soto", "price": 10000, "rating": 4.0, "addr": "Ajibarang", "lat": -7.4891, "lng": 109.1007},
+{"id": 5022, "name": "Bakso Mas Tris Ajibarang", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Ajibarang", "lat": -7.4872, "lng": 109.1020},
+{"id": 5023, "name": "Warung Nasi Uduk Ibu Diah", "category": "Warteg", "price": 10000, "rating": 4.2, "addr": "Ajibarang", "lat": -7.4886, "lng": 109.1010},
+{"id": 5024, "name": "Bebek Goreng Ajibarang", "category": "Bebek", "price": 18000, "rating": 4.1, "addr": "Ajibarang", "lat": -7.4898, "lng": 109.1009},
+{"id": 5025, "name": "Kopi Tengah Sawah Ajibarang", "category": "Cafe", "price": 15000, "rating": 4.3, "addr": "Ajibarang", "lat": -7.4903, "lng": 109.1024},
+{"id": 5026, "name": "Seafood 88 Ajibarang", "category": "Seafood", "price": 25000, "rating": 4.1, "addr": "Ajibarang", "lat": -7.4879, "lng": 109.1011},
+{"id": 5027, "name": "Angkringan Pak Broto Ajibarang", "category": "Angkringan", "price": 6000, "rating": 4.2, "addr": "Ajibarang", "lat": -7.4906, "lng": 109.1008},
+{"id": 5028, "name": "Mie Ayam Sari Rasa Ajibarang", "category": "Mie Ayam", "price": 10000, "rating": 4.1, "addr": "Ajibarang", "lat": -7.4884, "lng": 109.1026},
+{"id": 5029, "name": "Es Degan Segar Ajibarang", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Ajibarang", "lat": -7.4893, "lng": 109.1013},
+
+{"id": 5030, "name": "Soto Ayam Pak Mardi Wangon", "category": "Soto", "price": 10000, "rating": 4.0, "addr": "Wangon", "lat": -7.5242, "lng": 108.9535},
+{"id": 5031, "name": "Ayam Geprek Mbak Rara Wangon", "category": "Ayam Geprek", "price": 10000, "rating": 4.1, "addr": "Wangon", "lat": -7.5253, "lng": 108.9528},
+{"id": 5032, "name": "Warung Mari Mangan Wangon", "category": "Warteg", "price": 9000, "rating": 4.2, "addr": "Wangon", "lat": -7.5230, "lng": 108.9540},
+{"id": 5033, "name": "Seafood Laut Segar Wangon", "category": "Seafood", "price": 25000, "rating": 4.1, "addr": "Wangon", "lat": -7.5260, "lng": 108.9510},
+{"id": 5034, "name": "Bakso Urat Wangon", "category": "Bakso", "price": 12000, "rating": 4.2, "addr": "Wangon", "lat": -7.5220, "lng": 108.9550},
+{"id": 5035, "name": "Angkringan Kopi Hitam Wangon", "category": "Angkringan", "price": 6000, "rating": 4.3, "addr": "Wangon", "lat": -7.5248, "lng": 108.9539},
+{"id": 5036, "name": "Nasi Pecel Lezat Wangon", "category": "Pecel", "price": 9000, "rating": 4.1, "addr": "Wangon", "lat": -7.5239, "lng": 108.9542},
+{"id": 5037, "name": "Mie Ayam Pak Slamet Wangon", "category": "Mie Ayam", "price": 10000, "rating": 4.2, "addr": "Wangon", "lat": -7.5251, "lng": 108.9530},
+{"id": 5038, "name": "Es Campur Manis Wangon", "category": "Dessert", "price": 7000, "rating": 4.3, "addr": "Wangon", "lat": -7.5245, "lng": 108.9525},
+{"id": 5039, "name": "Ayam Bakar Bara Api Wangon", "category": "Ayam Bakar", "price": 18000, "rating": 4.2, "addr": "Wangon", "lat": -7.5256, "lng": 108.9533},
+
+{"id": 5040, "name": "Ayam Bakar Kemranjen", "category": "Ayam Bakar", "price": 15000, "rating": 4.2, "addr": "Kemranjen", "lat": -7.5630, "lng": 109.0430},
+{"id": 5041, "name": "Soto Ayam Kemranjen", "category": "Soto", "price": 10000, "rating": 4.1, "addr": "Kemranjen", "lat": -7.5640, "lng": 109.0440},
+{"id": 5042, "name": "Bakso Pak Kumis Kemranjen", "category": "Bakso", "price": 13000, "rating": 4.2, "addr": "Kemranjen", "lat": -7.5620, "lng": 109.0450},
+{"id": 5043, "name": "Angkringan Kembang Kemranjen", "category": "Angkringan", "price": 6000, "rating": 4.2, "addr": "Kemranjen", "lat": -7.5650, "lng": 109.0420},
+{"id": 5044, "name": "Es Kuwut Segar Kemranjen", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Kemranjen", "lat": -7.5660, "lng": 109.0460},
+{"id": 5045, "name": "Seafood Kemranjen 88", "category": "Seafood", "price": 25000, "rating": 4.1, "addr": "Kemranjen", "lat": -7.5645, "lng": 109.0435},
+{"id": 5046, "name": "Geprek Pedas Kemranjen", "category": "Ayam Geprek", "price": 10000, "rating": 4.3, "addr": "Kemranjen", "lat": -7.5638, "lng": 109.0441},
+{"id": 5047, "name": "Warung Pecel Mbak Sri", "category": "Pecel", "price": 9000, "rating": 4.2, "addr": "Kemranjen", "lat": -7.5634, "lng": 109.0443},
+{"id": 5048, "name": "Mie Ayam Berkah Kemranjen", "category": "Mie Ayam", "price": 10000, "rating": 4.1, "addr": "Kemranjen", "lat": -7.5627, "lng": 109.0452},
+{"id": 5049, "name": "Es Campur Kemranjen", "category": "Dessert", "price": 7000, "rating": 4.3, "addr": "Kemranjen", "lat": -7.5641, "lng": 109.0439},
+
+{"id": 5050, "name": "Sate Kambing Jatilawang", "category": "Sate", "price": 20000, "rating": 4.3, "addr": "Jatilawang", "lat": -7.5990, "lng": 109.0790},
+{"id": 5051, "name": "Ayam Geprek Jatilawang", "category": "Ayam Geprek", "price": 12000, "rating": 4.2, "addr": "Jatilawang", "lat": -7.5980, "lng": 109.0780},
+{"id": 5052, "name": "Warung Soto Bu Sari", "category": "Soto", "price": 10000, "rating": 4.1, "addr": "Jatilawang", "lat": -7.5970, "lng": 109.0770},
+{"id": 5053, "name": "Bakso Marem Jatilawang", "category": "Bakso", "price": 13000, "rating": 4.2, "addr": "Jatilawang", "lat": -7.6000, "lng": 109.0800},
+{"id": 5054, "name": "Es Campur Manis Jatilawang", "category": "Dessert", "price": 7000, "rating": 4.3, "addr": "Jatilawang", "lat": -7.6010, "lng": 109.0810},
+{"id": 5055, "name": "Angkringan Pak Bowo", "category": "Angkringan", "price": 6000, "rating": 4.1, "addr": "Jatilawang", "lat": -7.5995, "lng": 109.0805},
+{"id": 5056, "name": "Seafood Jatilawang 88", "category": "Seafood", "price": 25000, "rating": 4.2, "addr": "Jatilawang", "lat": -7.5988, "lng": 109.0799},
+{"id": 5057, "name": "Mie Ayam Ceker Pedas Jatilawang", "category": "Mie Ayam", "price": 10000, "rating": 4.1, "addr": "Jatilawang", "lat": -7.5983, "lng": 109.0785},
+{"id": 5058, "name": "Warung Lodeh Bu Marmi", "category": "Masakan Rumahan", "price": 9000, "rating": 4.2, "addr": "Jatilawang", "lat": -7.5978, "lng": 109.0783},
+{"id": 5059, "name": "Es Degan Segar Jatilawang", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Jatilawang", "lat": -7.5981, "lng": 109.0788}, {"id": 6000, "name": "Warung Sate Pak Giman", "category": "Sate", "price": 20000, "rating": 4.2, "addr": "Kedungbanteng", "lat": -7.3801, "lng": 109.2211},
+{"id": 6001, "name": "Ayam Geprek Kedungbanteng", "category": "Ayam Geprek", "price": 12000, "rating": 4.1, "addr": "Kedungbanteng", "lat": -7.3812, "lng": 109.2204},
+{"id": 6002, "name": "Bakso Solo Mantap", "category": "Bakso", "price": 13000, "rating": 4.3, "addr": "Kedungbanteng", "lat": -7.3795, "lng": 109.2220},
+{"id": 6003, "name": "Waroeng Kopi Kedungbanteng", "category": "Cafe", "price": 15000, "rating": 4.4, "addr": "Kedungbanteng", "lat": -7.3824, "lng": 109.2230},
+{"id": 6004, "name": "Seafood Kedungbanteng 88", "category": "Seafood", "price": 25000, "rating": 4.2, "addr": "Kedungbanteng", "lat": -7.3808, "lng": 109.2215},
+{"id": 6005, "name": "Es Campur Manis", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Kedungbanteng", "lat": -7.3811, "lng": 109.2208},
+{"id": 6006, "name": "Angkringan Kedungbanteng", "category": "Angkringan", "price": 6000, "rating": 4.1, "addr": "Kedungbanteng", "lat": -7.3806, "lng": 109.2222},
+{"id": 6007, "name": "Mie Ayam Barokah", "category": "Mie Ayam", "price": 10000, "rating": 4.2, "addr": "Kedungbanteng", "lat": -7.3817, "lng": 109.2234},
+{"id": 6008, "name": "Nasi Uduk Pagi Ceria", "category": "Warteg", "price": 9000, "rating": 4.0, "addr": "Kedungbanteng", "lat": -7.3799, "lng": 109.2217},
+{"id": 6009, "name": "Es Degan Segar", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Kedungbanteng", "lat": -7.3819, "lng": 109.2229}, {"id": 6010, "name": "Warung Sate Pak Darto", "category": "Sate", "price": 20000, "rating": 4.2, "addr": "Sumbang", "lat": -7.3721, "lng": 109.2402},
+{"id": 6011, "name": "Geprek Sumbang Pedas", "category": "Ayam Geprek", "price": 12000, "rating": 4.1, "addr": "Sumbang", "lat": -7.3734, "lng": 109.2409},
+{"id": 6012, "name": "Bakso Urat Sumbang", "category": "Bakso", "price": 13000, "rating": 4.2, "addr": "Sumbang", "lat": -7.3728, "lng": 109.2421},
+{"id": 6013, "name": "Nasi Pecel Bu Yadi", "category": "Pecel", "price": 9000, "rating": 4.3, "addr": "Sumbang", "lat": -7.3740, "lng": 109.2415},
+{"id": 6014, "name": "Es Campur Seger Sumbang", "category": "Dessert", "price": 8000, "rating": 4.4, "addr": "Sumbang", "lat": -7.3731, "lng": 109.2427},
+{"id": 6015, "name": "Seafood 77 Sumbang", "category": "Seafood", "price": 25000, "rating": 4.2, "addr": "Sumbang", "lat": -7.3745, "lng": 109.2398},
+{"id": 6016, "name": "Waroeng Kopi Sumbang", "category": "Cafe", "price": 15000, "rating": 4.4, "addr": "Sumbang", "lat": -7.3727, "lng": 109.2406},
+{"id": 6017, "name": "Angkringan Pak Man", "category": "Angkringan", "price": 6000, "rating": 4.2, "addr": "Sumbang", "lat": -7.3736, "lng": 109.2399},
+{"id": 6018, "name": "Mie Ayam Sumbang", "category": "Mie Ayam", "price": 10000, "rating": 4.1, "addr": "Sumbang", "lat": -7.3723, "lng": 109.2419},
+{"id": 6019, "name": "Es Degan Ijo Royo", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Sumbang", "lat": -7.3738, "lng": 109.2423}, {"id": 6020, "name": "Ayam Bakar Kembaran", "category": "Ayam Bakar", "price": 15000, "rating": 4.2, "addr": "Kembaran", "lat": -7.4302, "lng": 109.2781},
+{"id": 6021, "name": "Soto Ayam Bu Ning", "category": "Soto", "price": 10000, "rating": 4.0, "addr": "Kembaran", "lat": -7.4310, "lng": 109.2775},
+{"id": 6022, "name": "Bakso Marem Kembaran", "category": "Bakso", "price": 13000, "rating": 4.2, "addr": "Kembaran", "lat": -7.4298, "lng": 109.2788},
+{"id": 6023, "name": "Seafood Kembaran Mantap", "category": "Seafood", "price": 26000, "rating": 4.3, "addr": "Kembaran", "lat": -7.4306, "lng": 109.2771},
+{"id": 6024, "name": "Angkringan Kembaran Asri", "category": "Angkringan", "price": 6000, "rating": 4.1, "addr": "Kembaran", "lat": -7.4314, "lng": 109.2784},
+{"id": 6025, "name": "Mie Ayam Pak Dul", "category": "Mie Ayam", "price": 10000, "rating": 4.2, "addr": "Kembaran", "lat": -7.4320, "lng": 109.2790},
+{"id": 6026, "name": "Es Campur Kembaran", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Kembaran", "lat": -7.4296, "lng": 109.2778},
+{"id": 6027, "name": "Cafe Kopi Padi", "category": "Cafe", "price": 15000, "rating": 4.4, "addr": "Kembaran", "lat": -7.4301, "lng": 109.2787},
+{"id": 6028, "name": "Geprek Pedas Kembaran", "category": "Ayam Geprek", "price": 12000, "rating": 4.1, "addr": "Kembaran", "lat": -7.4319, "lng": 109.2769},
+{"id": 6029, "name": "Nasi Uduk Kembaran", "category": "Warteg", "price": 9000, "rating": 4.0, "addr": "Kembaran", "lat": -7.4317, "lng": 109.2794}, {"id": 6030, "name": "Warung Soto Pak Kromo", "category": "Soto", "price": 10000, "rating": 4.2, "addr": "Kalibagor", "lat": -7.4691, "lng": 109.3011},
+{"id": 6031, "name": "Ayam Geprek Mbak Nina", "category": "Ayam Geprek", "price": 12000, "rating": 4.1, "addr": "Kalibagor", "lat": -7.4684, "lng": 109.3007},
+{"id": 6032, "name": "Bakso Urat Kalibagor", "category": "Bakso", "price": 13000, "rating": 4.2, "addr": "Kalibagor", "lat": -7.4676, "lng": 109.3014},
+{"id": 6033, "name": "Seafood Kalibagor 79", "category": "Seafood", "price": 26000, "rating": 4.3, "addr": "Kalibagor", "lat": -7.4693, "lng": 109.3021},
+{"id": 6034, "name": "Cafe Kopi Sore", "category": "Cafe", "price": 15000, "rating": 4.4, "addr": "Kalibagor", "lat": -7.4682, "lng": 109.3025},
+{"id": 6035, "name": "Angkringan Kalibagor", "category": "Angkringan", "price": 6000, "rating": 4.1, "addr": "Kalibagor", "lat": -7.4697, "lng": 109.3009},
+{"id": 6036, "name": "Es Campur Manis Kalibagor", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Kalibagor", "lat": -7.4694, "lng": 109.3019},
+{"id": 6037, "name": "Mie Ayam Putra Mandiri", "category": "Mie Ayam", "price": 10000, "rating": 4.2, "addr": "Kalibagor", "lat": -7.4679, "lng": 109.3016},
+{"id": 6038, "name": "Nasi Uduk Bu Wati", "category": "Warteg", "price": 9000, "rating": 4.0, "addr": "Kalibagor", "lat": -7.4688, "lng": 109.3003},
+{"id": 6039, "name": "Es Degan Segar Kalibagor", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Kalibagor", "lat": -7.4692, "lng": 109.3017}, {"id": 6040, "name": "Soto Ayam Kebasen", "category": "Soto", "price": 10000, "rating": 4.1, "addr": "Kebasen", "lat": -7.5861, "lng": 109.1941},
+{"id": 6041, "name": "Ayam Geprek Bu Rara", "category": "Ayam Geprek", "price": 12000, "rating": 4.2, "addr": "Kebasen", "lat": -7.5853, "lng": 109.1950},
+{"id": 6042, "name": "Bakso Marem Kebasen", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Kebasen", "lat": -7.5848, "lng": 109.1944},
+{"id": 6043, "name": "Warung Pecel Mbok Yem", "category": "Pecel", "price": 9000, "rating": 4.2, "addr": "Kebasen", "lat": -7.5867, "lng": 109.1936},
+{"id": 6044, "name": "Es Campur Kebasen", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Kebasen", "lat": -7.5859, "lng": 109.1954},
+{"id": 6045, "name": "Seafood Lautan Rasa", "category": "Seafood", "price": 26000, "rating": 4.2, "addr": "Kebasen", "lat": -7.5847, "lng": 109.1949},
+{"id": 6046, "name": "Angkringan Kebasen Asri", "category": "Angkringan", "price": 6000, "rating": 4.0, "addr": "Kebasen", "lat": -7.5863, "lng": 109.1945},
+{"id": 6047, "name": "Cafe Kopi Kebasen", "category": "Cafe", "price": 15000, "rating": 4.4, "addr": "Kebasen", "lat": -7.5851, "lng": 109.1939},
+{"id": 6048, "name": "Mie Ayam Basoka", "category": "Mie Ayam", "price": 10000, "rating": 4.2, "addr": "Kebasen", "lat": -7.5858, "lng": 109.1952},
+{"id": 6049, "name": "Es Degan Manis Kebasen", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Kebasen", "lat": -7.5865, "lng": 109.1948}, {"id": 6050, "name": "Soto Rawalo", "category": "Soto", "price": 10000, "rating": 4.1, "addr": "Rawalo", "lat": -7.5511, "lng": 109.1451},
+{"id": 6051, "name": "Ayam Geprek Rawalo", "category": "Ayam Geprek", "price": 12000, "rating": 4.2, "addr": "Rawalo", "lat": -7.5516, "lng": 109.1448},
+{"id": 6052, "name": "Bakso Pak Lik", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Rawalo", "lat": -7.5522, "lng": 109.1454},
+{"id": 6053, "name": "Seafood Rawalo 88", "category": "Seafood", "price": 25000, "rating": 4.2, "addr": "Rawalo", "lat": -7.5519, "lng": 109.1442},
+{"id": 6054, "name": "Es Campur Rawalo", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Rawalo", "lat": -7.5514, "lng": 109.1457},
+{"id": 6055, "name": "Angkringan Rawalo", "category": "Angkringan", "price": 6000, "rating": 4.1, "addr": "Rawalo", "lat": -7.5526, "lng": 109.1450},
+{"id": 6056, "name": "Cafe Kopi Tepi Sawah", "category": "Cafe", "price": 15000, "rating": 4.4, "addr": "Rawalo", "lat": -7.5518, "lng": 109.1459},
+{"id": 6057, "name": "Mie Ayam Mas Bro", "category": "Mie Ayam", "price": 10000, "rating": 4.2, "addr": "Rawalo", "lat": -7.5521, "lng": 109.1446},
+{"id": 6058, "name": "Nasi Pecel Rawalo", "category": "Pecel", "price": 9000, "rating": 4.1, "addr": "Rawalo", "lat": -7.5525, "lng": 109.1453},
+{"id": 6059, "name": "Es Degan Rawalo", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Rawalo", "lat": -7.5513, "lng": 109.1444}, {"id": 6060, "name": "Soto Purwojati", "category": "Soto", "price": 10000, "rating": 4.1, "addr": "Purwojati", "lat": -7.5852, "lng": 109.1207},
+{"id": 6061, "name": "Ayam Geprek Purwojati", "category": "Ayam Geprek", "price": 12000, "rating": 4.2, "addr": "Purwojati", "lat": -7.5861, "lng": 109.1211},
+{"id": 6062, "name": "Bakso Berkah Purwojati", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Purwojati", "lat": -7.5870, "lng": 109.1203},
+{"id": 6063, "name": "Seafood Purwojati 88", "category": "Seafood", "price": 26000, "rating": 4.2, "addr": "Purwojati", "lat": -7.5866, "lng": 109.1213},
+{"id": 6064, "name": "Es Campur Purwojati", "category": "Dessert", "price": 8000, "rating": 4.4, "addr": "Purwojati", "lat": -7.5858, "lng": 109.1206},
+{"id": 6065, "name": "Angkringan Purwojati", "category": "Angkringan", "price": 6000, "rating": 4.0, "addr": "Purwojati", "lat": -7.5873, "lng": 109.1209},
+{"id": 6066, "name": "Cafe Kopi Pinggir Sawah", "category": "Cafe", "price": 16000, "rating": 4.4, "addr": "Purwojati", "lat": -7.5869, "lng": 109.1217},
+{"id": 6067, "name": "Mie Ayam Pak Kumis", "category": "Mie Ayam", "price": 10000, "rating": 4.2, "addr": "Purwojati", "lat": -7.5874, "lng": 109.1201},
+{"id": 6068, "name": "Nasi Uduk Purwojati", "category": "Warteg", "price": 9000, "rating": 4.0, "addr": "Purwojati", "lat": -7.5854, "lng": 109.1215},
+{"id": 6069, "name": "Es Degan Segar Purwojati", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Purwojati", "lat": -7.5862, "lng": 109.1219}, {"id": 6070, "name": "Soto Lumbir", "category": "Soto", "price": 10000, "rating": 4.1, "addr": "Lumbir", "lat": -7.5611, "lng": 108.9942},
+{"id": 6071, "name": "Ayam Geprek Lumbir", "category": "Ayam Geprek", "price": 12000, "rating": 4.2, "addr": "Lumbir", "lat": -7.5618, "lng": 108.9939},
+{"id": 6072, "name": "Bakso Marem Lumbir", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Lumbir", "lat": -7.5623, "lng": 108.9946},
+{"id": 6073, "name": "Seafood Lumbir Mantap", "category": "Seafood", "price": 25000, "rating": 4.2, "addr": "Lumbir", "lat": -7.5616, "lng": 108.9951},
+{"id": 6074, "name": "Es Campur Lumbir", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Lumbir", "lat": -7.5612, "lng": 108.9948},
+{"id": 6075, "name": "Angkringan Lumbir", "category": "Angkringan", "price": 6000, "rating": 4.0, "addr": "Lumbir", "lat": -7.5620, "lng": 108.9954},
+{"id": 6076, "name": "Cafe Kopi Alas", "category": "Cafe", "price": 16000, "rating": 4.4, "addr": "Lumbir", "lat": -7.5627, "lng": 108.9940},
+{"id": 6077, "name": "Mie Ayam Lumbir", "category": "Mie Ayam", "price": 10000, "rating": 4.1, "addr": "Lumbir", "lat": -7.5624, "lng": 108.9958},
+{"id": 6078, "name": "Nasi Uduk Lumbir", "category": "Warteg", "price": 9000, "rating": 4.0, "addr": "Lumbir", "lat": -7.5619, "lng": 108.9956},
+{"id": 6079, "name": "Es Degan Manis Lumbir", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Lumbir", "lat": -7.5615, "lng": 108.9944}, {"id": 6080, "name": "Warung Sate Gumelar", "category": "Sate", "price": 20000, "rating": 4.2, "addr": "Gumelar", "lat": -7.4472, "lng": 108.9760},
+{"id": 6081, "name": "Ayam Geprek Gumelar", "category": "Ayam Geprek", "price": 12000, "rating": 4.1, "addr": "Gumelar", "lat": -7.4480, "lng": 108.9769},
+{"id": 6082, "name": "Bakso Urat Gumelar", "category": "Bakso", "price": 13000, "rating": 4.2, "addr": "Gumelar", "lat": -7.4476, "lng": 108.9754},
+{"id": 6083, "name": "Seafood Gumelar 88", "category": "Seafood", "price": 25000, "rating": 4.1, "addr": "Gumelar", "lat": -7.4483, "lng": 108.9771},
+{"id": 6084, "name": "Es Campur Gumelar", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Gumelar", "lat": -7.4473, "lng": 108.9766},
+{"id": 6085, "name": "Angkringan Gumelar", "category": "Angkringan", "price": 6000, "rating": 4.0, "addr": "Gumelar", "lat": -7.4484, "lng": 108.9758},
+{"id": 6086, "name": "Cafe Kopi Hutan", "category": "Cafe", "price": 15000, "rating": 4.4, "addr": "Gumelar", "lat": -7.4479, "lng": 108.9763},
+{"id": 6087, "name": "Mie Ayam Gumelar", "category": "Mie Ayam", "price": 10000, "rating": 4.1, "addr": "Gumelar", "lat": -7.4481, "lng": 108.9767},
+{"id": 6088, "name": "Nasi Uduk Gumelar", "category": "Warteg", "price": 9000, "rating": 4.0, "addr": "Gumelar", "lat": -7.4475, "lng": 108.9759},
+{"id": 6089, "name": "Es Degan Segar Gumelar", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Gumelar", "lat": -7.4470, "lng": 108.9762}, {"id": 6090, "name": "Soto Pekuncen", "category": "Soto", "price": 10000, "rating": 4.2, "addr": "Pekuncen", "lat": -7.4272, "lng": 108.9972},
+{"id": 6091, "name": "Ayam Geprek Pekuncen", "category": "Ayam Geprek", "price": 12000, "rating": 4.1, "addr": "Pekuncen", "lat": -7.4268, "lng": 108.9964},
+{"id": 6092, "name": "Bakso Berkah Pekuncen", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Pekuncen", "lat": -7.4276, "lng": 108.9970},
+{"id": 6093, "name": "Seafood Pekuncen Mantap", "category": "Seafood", "price": 26000, "rating": 4.3, "addr": "Pekuncen", "lat": -7.4265, "lng": 108.9961},
+{"id": 6094, "name": "Es Campur Pekuncen", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Pekuncen", "lat": -7.4270, "lng": 108.9969},
+{"id": 6095, "name": "Angkringan Pekuncen", "category": "Angkringan", "price": 6000, "rating": 4.0, "addr": "Pekuncen", "lat": -7.4269, "lng": 108.9968},
+{"id": 6096, "name": "Cafe Kopi Gardu", "category": "Cafe", "price": 15000, "rating": 4.4, "addr": "Pekuncen", "lat": -7.4263, "lng": 108.9975},
+{"id": 6097, "name": "Mie Ayam Pekuncen", "category": "Mie Ayam", "price": 10000, "rating": 4.1, "addr": "Pekuncen", "lat": -7.4274, "lng": 108.9978},
+{"id": 6098, "name": "Nasi Uduk Pekuncen", "category": "Warteg", "price": 9000, "rating": 4.0, "addr": "Pekuncen", "lat": -7.4266, "lng": 108.9973},
+{"id": 6099, "name": "Es Degan Segar Pekuncen", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Pekuncen", "lat": -7.4271, "lng": 108.9963}, {"id": 6100, "name": "Soto Ayam Karanglewas", "category": "Soto", "price": 10000, "rating": 4.1, "addr": "Karanglewas", "lat": -7.4611, "lng": 109.2172},
+{"id": 6101, "name": "Ayam Geprek Karanglewas", "category": "Ayam Geprek", "price": 12000, "rating": 4.2, "addr": "Karanglewas", "lat": -7.4606, "lng": 109.2179},
+{"id": 6102, "name": "Bakso Pak Mardi", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Karanglewas", "lat": -7.4619, "lng": 109.2185},
+{"id": 6103, "name": "Seafood Karanglewas 99", "category": "Seafood", "price": 26000, "rating": 4.3, "addr": "Karanglewas", "lat": -7.4602, "lng": 109.2167},
+{"id": 6104, "name": "Es Campur Karanglewas", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Karanglewas", "lat": -7.4609, "lng": 109.2182},
+{"id": 6105, "name": "Angkringan Karanglewas", "category": "Angkringan", "price": 6000, "rating": 4.0, "addr": "Karanglewas", "lat": -7.4622, "lng": 109.2169},
+{"id": 6106, "name": "Cafe Kopi Senja", "category": "Cafe", "price": 15000, "rating": 4.4, "addr": "Karanglewas", "lat": -7.4614, "lng": 109.2175},
+{"id": 6107, "name": "Mie Ayam Karanglewas", "category": "Mie Ayam", "price": 10000, "rating": 4.2, "addr": "Karanglewas", "lat": -7.4618, "lng": 109.2188},
+{"id": 6108, "name": "Nasi Uduk Karanglewas", "category": "Warteg", "price": 9000, "rating": 4.1, "addr": "Karanglewas", "lat": -7.4605, "lng": 109.2171},
+{"id": 6109, "name": "Es Degan Karanglewas", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Karanglewas", "lat": -7.4612, "lng": 109.2181}, {"id": 6110, "name": "Soto Somagede", "category": "Soto", "price": 10000, "rating": 4.2, "addr": "Somagede", "lat": -7.5740, "lng": 109.2671},
+{"id": 6111, "name": "Ayam Geprek Somagede", "category": "Ayam Geprek", "price": 12000, "rating": 4.1, "addr": "Somagede", "lat": -7.5736, "lng": 109.2667},
+{"id": 6112, "name": "Bakso Pak Yanto", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Somagede", "lat": -7.5730, "lng": 109.2674},
+{"id": 6113, "name": "Seafood Somagede Mantap", "category": "Seafood", "price": 25000, "rating": 4.2, "addr": "Somagede", "lat": -7.5742, "lng": 109.2661},
+{"id": 6114, "name": "Es Campur Somagede", "category": "Dessert", "price": 8000, "rating": 4.4, "addr": "Somagede", "lat": -7.5733, "lng": 109.2678},
+{"id": 6115, "name": "Angkringan Somagede", "category": "Angkringan", "price": 6000, "rating": 4.0, "addr": "Somagede", "lat": -7.5739, "lng": 109.2665},
+{"id": 6116, "name": "Cafe Kopi Lereng", "category": "Cafe", "price": 15000, "rating": 4.3, "addr": "Somagede", "lat": -7.5743, "lng": 109.2676},
+{"id": 6117, "name": "Mie Ayam Somagede", "category": "Mie Ayam", "price": 10000, "rating": 4.1, "addr": "Somagede", "lat": -7.5731, "lng": 109.2683},
+{"id": 6118, "name": "Nasi Uduk Somagede", "category": "Warteg", "price": 9000, "rating": 4.0, "addr": "Somagede", "lat": -7.5741, "lng": 109.2680},
+{"id": 6119, "name": "Es Degan Somagede", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Somagede", "lat": -7.5734, "lng": 109.2669}, {"id": 6120, "name": "Soto Banyumas Asli", "category": "Soto", "price": 11000, "rating": 4.3, "addr": "Banyumas Kota", "lat": -7.5141, "lng": 109.2921},
+{"id": 6121, "name": "Ayam Geprek Ndower", "category": "Ayam Geprek", "price": 12000, "rating": 4.2, "addr": "Banyumas Kota", "lat": -7.5149, "lng": 109.2914},
+{"id": 6122, "name": "Bakso Pak Lurah", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Banyumas Kota", "lat": -7.5154, "lng": 109.2925},
+{"id": 6123, "name": "Seafood Lesehan Banyumas", "category": "Seafood", "price": 27000, "rating": 4.4, "addr": "Banyumas Kota", "lat": -7.5148, "lng": 109.2919},
+{"id": 6124, "name": "Es Campur Banyumas", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Banyumas Kota", "lat": -7.5157, "lng": 109.2927},
+{"id": 6125, "name": "Kopi Loji Banyumas", "category": "Cafe", "price": 18000, "rating": 4.5, "addr": "Banyumas Kota", "lat": -7.5145, "lng": 109.2912},
+{"id": 6126, "name": "Angkringan d'Kota", "category": "Angkringan", "price": 6000, "rating": 4.1, "addr": "Banyumas Kota", "lat": -7.5152, "lng": 109.2929},
+{"id": 6127, "name": "Mie Ayam Mbok Giyem", "category": "Mie Ayam", "price": 10000, "rating": 4.2, "addr": "Banyumas Kota", "lat": -7.5151, "lng": 109.2917},
+{"id": 6128, "name": "Nasi Uduk Bu Dayem", "category": "Warteg", "price": 9000, "rating": 4.0, "addr": "Banyumas Kota", "lat": -7.5143, "lng": 109.2923},
+{"id": 6129, "name": "Es Degan Banyumas", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Banyumas Kota", "lat": -7.5150, "lng": 109.2916}, {"id": 6130, "name": "Soto Sumpiuh", "category": "Soto", "price": 10000, "rating": 4.1, "addr": "Sumpiuh", "lat": -7.6061, "lng": 109.2151},
+{"id": 6131, "name": "Ayam Geprek Sumpiuh", "category": "Ayam Geprek", "price": 12000, "rating": 4.2, "addr": "Sumpiuh", "lat": -7.6055, "lng": 109.2162},
+{"id": 6132, "name": "Bakso Pak Endut", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Sumpiuh", "lat": -7.6064, "lng": 109.2154},
+{"id": 6133, "name": "Seafood Sumpiuh Segar", "category": "Seafood", "price": 26000, "rating": 4.2, "addr": "Sumpiuh", "lat": -7.6059, "lng": 109.2149},
+{"id": 6134, "name": "Es Campur Sumpiuh", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Sumpiuh", "lat": -7.6067, "lng": 109.2157},
+{"id": 6135, "name": "Angkringan Sumpiuh", "category": "Angkringan", "price": 6000, "rating": 4.0, "addr": "Sumpiuh", "lat": -7.6052, "lng": 109.2160},
+{"id": 6136, "name": "Cafe Kopi Tepi Rel", "category": "Cafe", "price": 16000, "rating": 4.4, "addr": "Sumpiuh", "lat": -7.6063, "lng": 109.2164},
+{"id": 6137, "name": "Mie Ayam Sumpiuh", "category": "Mie Ayam", "price": 10000, "rating": 4.1, "addr": "Sumpiuh", "lat": -7.6068, "lng": 109.2168},
+{"id": 6138, "name": "Nasi Uduk Sumpiuh", "category": "Warteg", "price": 9000, "rating": 4.0, "addr": "Sumpiuh", "lat": -7.6057, "lng": 109.2153},
+{"id": 6139, "name": "Es Degan Sumpiuh", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Sumpiuh", "lat": -7.6054, "lng": 109.2166}, {"id": 6140, "name": "Soto Tambak", "category": "Soto", "price": 10000, "rating": 4.1, "addr": "Tambak", "lat": -7.6261, "lng": 109.2741},
+{"id": 6141, "name": "Ayam Geprek Tambak", "category": "Ayam Geprek", "price": 12000, "rating": 4.2, "addr": "Tambak", "lat": -7.6255, "lng": 109.2752},
+{"id": 6142, "name": "Bakso Pak Rudi", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Tambak", "lat": -7.6264, "lng": 109.2744},
+{"id": 6143, "name": "Seafood Tambak Segar", "category": "Seafood", "price": 26000, "rating": 4.3, "addr": "Tambak", "lat": -7.6258, "lng": 109.2759},
+{"id": 6144, "name": "Es Campur Tambak", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Tambak", "lat": -7.6267, "lng": 109.2747},
+{"id": 6145, "name": "Angkringan Tambak", "category": "Angkringan", "price": 6000, "rating": 4.0, "addr": "Tambak", "lat": -7.6253, "lng": 109.2755},
+{"id": 6146, "name": "Cafe Kopi Persawahan", "category": "Cafe", "price": 16000, "rating": 4.4, "addr": "Tambak", "lat": -7.6260, "lng": 109.2760},
+{"id": 6147, "name": "Mie Ayam Tambak", "category": "Mie Ayam", "price": 10000, "rating": 4.1, "addr": "Tambak", "lat": -7.6268, "lng": 109.2753},
+{"id": 6148, "name": "Nasi Uduk Tambak", "category": "Warteg", "price": 9000, "rating": 4.0, "addr": "Tambak", "lat": -7.6259, "lng": 109.2749},
+{"id": 6149, "name": "Es Degan Tambak", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Tambak", "lat": -7.6265, "lng": 109.2757}, {"id": 6150, "name": "Soto Patikraja", "category": "Soto", "price": 10000, "rating": 4.1, "addr": "Patikraja", "lat": -7.4571, "lng": 109.2258},
+{"id": 6151, "name": "Ayam Geprek Patikraja", "category": "Ayam Geprek", "price": 12000, "rating": 4.2, "addr": "Patikraja", "lat": -7.4566, "lng": 109.2262},
+{"id": 6152, "name": "Bakso Pak Yasin", "category": "Bakso", "price": 13000, "rating": 4.1, "addr": "Patikraja", "lat": -7.4577, "lng": 109.2253},
+{"id": 6153, "name": "Seafood Patikraja", "category": "Seafood", "price": 25000, "rating": 4.3, "addr": "Patikraja", "lat": -7.4569, "lng": 109.2271},
+{"id": 6154, "name": "Es Campur Patikraja", "category": "Dessert", "price": 8000, "rating": 4.3, "addr": "Patikraja", "lat": -7.4574, "lng": 109.2264},
+{"id": 6155, "name": "Angkringan Patikraja", "category": "Angkringan", "price": 6000, "rating": 4.0, "addr": "Patikraja", "lat": -7.4561, "lng": 109.2256},
+{"id": 6156, "name": "Cafe Kopi Patikraja", "category": "Cafe", "price": 16000, "rating": 4.4, "addr": "Patikraja", "lat": -7.4563, "lng": 109.2273},
+{"id": 6157, "name": "Mie Ayam Patikraja", "category": "Mie Ayam", "price": 10000, "rating": 4.2, "addr": "Patikraja", "lat": -7.4568, "lng": 109.2259},
+{"id": 6158, "name": "Nasi Uduk Patikraja", "category": "Warteg", "price": 9000, "rating": 4.1, "addr": "Patikraja", "lat": -7.4572, "lng": 109.2267},
+{"id": 6159, "name": "Es Degan Patikraja", "category": "Minuman Segar", "price": 7000, "rating": 4.3, "addr": "Patikraja", "lat": -7.4564, "lng": 109.2254}, {"id": 6160, "name": "Soto Ayam Barat", "category": "Soto", "price": 11000, "rating": 4.2, "addr": "Purwokerto Barat", "lat": -7.4261, "lng": 109.2377},
+{"id": 6161, "name": "Ayam Geprek Sultan", "category": "Ayam Geprek", "price": 14000, "rating": 4.3, "addr": "Purwokerto Barat", "lat": -7.4258, "lng": 109.2382},
+{"id": 6162, "name": "Bakso Bom Giant", "category": "Bakso", "price": 15000, "rating": 4.4, "addr": "Purwokerto Barat", "lat": -7.4266, "lng": 109.2371},
+{"id": 6163, "name": "Seafood Barat 89", "category": "Seafood", "price": 30000, "rating": 4.4, "addr": "Purwokerto Barat", "lat": -7.4271, "lng": 109.2385},
+{"id": 6164, "name": "Es Krim Sundae West", "category": "Dessert", "price": 9000, "rating": 4.5, "addr": "Purwokerto Barat", "lat": -7.4259, "lng": 109.2374},
+{"id": 6165, "name": "Angkringan Barat", "category": "Angkringan", "price": 7000, "rating": 4.1, "addr": "Purwokerto Barat", "lat": -7.4263, "lng": 109.2380},
+{"id": 6166, "name": "Cafe Kopi Otentik", "category": "Cafe", "price": 20000, "rating": 4.6, "addr": "Purwokerto Barat", "lat": -7.4270, "lng": 109.2389},
+{"id": 6167, "name": "Mie Ayam Ceker Hot", "category": "Mie Ayam", "price": 12000, "rating": 4.3, "addr": "Purwokerto Barat", "lat": -7.4273, "lng": 109.2372},
+{"id": 6168, "name": "Nasi Uduk Kuning", "category": "Warteg", "price": 10000, "rating": 4.1, "addr": "Purwokerto Barat", "lat": -7.4257, "lng": 109.2388},
+{"id": 6169, "name": "Es Degan Fresh Barat", "category": "Minuman Segar", "price": 8000, "rating": 4.4, "addr": "Purwokerto Barat", "lat": -7.4269, "lng": 109.2381}, {"id": 6170, "name": "Soto Ayam Timur", "category": "Soto", "price": 11000, "rating": 4.2, "addr": "Purwokerto Timur", "lat": -7.4266, "lng": 109.2524},
+{"id": 6171, "name": "Ayam Geprek Ndower Timur", "category": "Ayam Geprek", "price": 13000, "rating": 4.3, "addr": "Purwokerto Timur", "lat": -7.4271, "lng": 109.2531},
+{"id": 6172, "name": "Bakso Pak Slamet Timur", "category": "Bakso", "price": 14000, "rating": 4.4, "addr": "Purwokerto Timur", "lat": -7.4262, "lng": 109.2518},
+{"id": 6173, "name": "Seafood Timur Segar", "category": "Seafood", "price": 30000, "rating": 4.3, "addr": "Purwokerto Timur", "lat": -7.4274, "lng": 109.2529},
+{"id": 6174, "name": "Es Krim Vanilla Timur", "category": "Dessert", "price": 9000, "rating": 4.5, "addr": "Purwokerto Timur", "lat": -7.4269, "lng": 109.2522},
+{"id": 6175, "name": "Angkringan Timur", "category": "Angkringan", "price": 7000, "rating": 4.1, "addr": "Purwokerto Timur", "lat": -7.4258, "lng": 109.2517},
+{"id": 6176, "name": "Kopi Senja Timur", "category": "Cafe", "price": 20000, "rating": 4.6, "addr": "Purwokerto Timur", "lat": -7.4273, "lng": 109.2534},
+{"id": 6177, "name": "Mie Ayam Lezat Timur", "category": "Mie Ayam", "price": 12000, "rating": 4.3, "addr": "Purwokerto Timur", "lat": -7.4265, "lng": 109.2527},
+{"id": 6178, "name": "Nasi Uduk Timur", "category": "Warteg", "price": 10000, "rating": 4.1, "addr": "Purwokerto Timur", "lat": -7.4270, "lng": 109.2519},
+{"id": 6179, "name": "Es Degan Timur", "category": "Minuman Segar", "price": 8000, "rating": 4.4, "addr": "Purwokerto Timur", "lat": -7.4261, "lng": 109.2530}, {"id": 6180, "name": "Soto Ayam Selatan", "category": "Soto", "price": 11000, "rating": 4.2, "addr": "Purwokerto Selatan", "lat": -7.4461, "lng": 109.2431},
+{"id": 6181, "name": "Ayam Geprek Selatan", "category": "Ayam Geprek", "price": 13000, "rating": 4.4, "addr": "Purwokerto Selatan", "lat": -7.4467, "lng": 109.2428},
+{"id": 6182, "name": "Bakso Jumbo Selatan", "category": "Bakso", "price": 14000, "rating": 4.3, "addr": "Purwokerto Selatan", "lat": -7.4458, "lng": 109.2435},
+{"id": 6183, "name": "Seafood Selatan Maknyus", "category": "Seafood", "price": 29000, "rating": 4.4, "addr": "Purwokerto Selatan", "lat": -7.4465, "lng": 109.2439},
+{"id": 6184, "name": "Es Krim Choco South", "category": "Dessert", "price": 9000, "rating": 4.5, "addr": "Purwokerto Selatan", "lat": -7.4459, "lng": 109.2426},
+{"id": 6185, "name": "Angkringan Selatan", "category": "Angkringan", "price": 7000, "rating": 4.2, "addr": "Purwokerto Selatan", "lat": -7.4463, "lng": 109.2433},
+{"id": 6186, "name": "Kopi Tepi Jalan", "category": "Cafe", "price": 20000, "rating": 4.6, "addr": "Purwokerto Selatan", "lat": -7.4457, "lng": 109.2429},
+{"id": 6187, "name": "Mie Ayam Selatan", "category": "Mie Ayam", "price": 12000, "rating": 4.3, "addr": "Purwokerto Selatan", "lat": -7.4468, "lng": 109.2437},
+{"id": 6188, "name": "Nasi Uduk Selatan", "category": "Warteg", "price": 10000, "rating": 4.1, "addr": "Purwokerto Selatan", "lat": -7.4456, "lng": 109.2432},
+{"id": 6189, "name": "Es Degan Selatan", "category": "Minuman Segar", "price": 8000, "rating": 4.4, "addr": "Purwokerto Selatan", "lat": -7.4464, "lng": 109.2430}];
+// populate category select
+const categories = Array.from(new Set(PLACES.map(p=>p.category)));
+const foodTypeSelect = document.getElementById('foodType');
+categories.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; foodTypeSelect.appendChild(opt); });
+
+document.getElementById('totalCount').textContent = PLACES.length;
+
+const resultsEl = document.getElementById('results');
+const favKey = 'mp_fav_super_v1';
+let favs = JSON.parse(localStorage.getItem(favKey) || '[]');
+let userLoc = null;
+let map = null;
+let markers = [];
+
+function mapsLinkCoords(p){ return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.lat + ',' + p.lng)}`; }
+function mapsLinkQuery(name){ return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' Purwokerto')}`; }
+function haversine(a,b){ const R=6371; const toRad=d=>d*Math.PI/180; const dLat=toRad(b.lat-a.lat); const dLon=toRad(b.lng-a.lng); const lat1=toRad(a.lat); const lat2=toRad(b.lat); const aa=Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2; return R*2*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa)); }
+
+function scorePlace(p){
+  let s = p.rating;
+  if(userLoc && p.lat && p.lng){
+    const d = haversine(userLoc,{lat:p.lat,lng:p.lng});
+    s += Math.max(0,(2 - Math.min(d,10)) / 10);
+  }
+  return s;
+}
+
+function recommend(){
+  const q = (document.getElementById('q').value || '').trim().toLowerCase();
+  const food = document.getElementById('foodType').value;
+  const sortBy = document.getElementById('sortBy').value;
+  const minP = Number(document.getElementById('minPrice').value || 0);
+  const maxP = Number(document.getElementById('maxPrice').value || 1e9);
+
+  let candidates = PLACES.filter(p=>p.price>=minP && p.price<=maxP);
+  if(food && food!=='all') candidates = candidates.filter(p=>p.category === food);
+  if(q) candidates = candidates.filter(p=> (p.name + ' ' + (p.addr||'') + ' ' + p.category).toLowerCase().includes(q));
+
+  candidates = candidates.map(p=>({...p, score: scorePlace(p)}));
+
+  if(sortBy === 'distance' && userLoc){
+    candidates.sort((a,b)=>{
+      const da = (a.lat && a.lng) ? haversine(userLoc,{lat:a.lat,lng:a.lng}) : 1e6;
+      const db = (b.lat && b.lng) ? haversine(userLoc,{lat:b.lat,lng:b.lng}) : 1e6;
+      return da - db;
+    });
+  } else if(sortBy === 'price_asc'){
+    candidates.sort((a,b)=> a.price - b.price);
+  } else if(sortBy === 'price_desc'){
+    candidates.sort((a,b)=> b.price - a.price);
+  } else {
+    candidates.sort((a,b)=> (b.score ?? b.rating) - (a.score ?? a.rating));
+  }
+
+  return candidates;
+}
+
+function clearMarkers(){ if(!map) return; markers.forEach(m=>map.removeLayer(m)); markers=[]; }
+
+function tryAddMarker(p){
+  if(!map || !p.lat || !p.lng) return;
+  const mk = L.marker([p.lat,p.lng]).addTo(map);
+  mk.bindPopup("<strong>"+p.name+"</strong><br>"+(p.addr || '')+"<br><a href='https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(p.lat+','+p.lng)+"' target='_blank'>Buka di Google Maps</a>");
+  markers.push(mk);
+}
+
+function render(list){
+  resultsEl.innerHTML='';
+  clearMarkers();
+  if(!list || list.length===0){ resultsEl.innerHTML = '<div class="card" style="grid-column:1/-1;color:var(--muted)">Tidak ditemukan. Coba ubah filter.</div>'; return; }
+  list.forEach(p=>{
+    const el = document.createElement('article'); el.className='place';
+    const distText = (userLoc && p.lat && p.lng) ? (haversine(userLoc,{lat:p.lat,lng:p.lng}).toFixed(2) + ' km') : '-';
+    el.innerHTML = `
+      <div class="thumbnail">${p.category.split(' ')[0].slice(0,2).toUpperCase()}</div>
+      <div class="meta">
+        <h3>${p.name}</h3>
+        <p>${p.addr || '-'}</p>
+        <div class="attrs"><div>Rp ${p.price.toLocaleString()}</div><div>⭐ ${p.rating}</div><div>Jarak: ${distText}</div><div>${p.category}</div></div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('${p.lat},${p.lng}')} " target="_blank" rel="noopener">Buka di Google Maps</a>
+        <button class="btn primary favBtn">${favs.includes(p.id)? 'Favorit' : 'Simpan'}</button>
+      </div>
+    `;
+    el.querySelector('.favBtn').addEventListener('click', ()=>{ if(favs.includes(p.id)) favs = favs.filter(x=>x!==p.id); else favs.push(p.id); localStorage.setItem(favKey,JSON.stringify(favs)); render(list); renderFavs(); });
+    resultsEl.appendChild(el);
+    tryAddMarker(p);
+  });
+  if(map && markers.length>0){
+    const group = new L.featureGroup(markers);
+    map.fitBounds(group.getBounds().pad(0.2));
+  }
+}
+
+function renderFavs(){ const el=document.getElementById('favList'); el.innerHTML=''; if(!favs || favs.length===0){ el.textContent='Belum ada favorit.'; return; } favs.forEach(id=>{ const p = PLACES.find(x=>x.id===id); if(!p) return; const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.marginBottom='6px'; row.innerHTML = `<div style="margin-right:8px">${p.name}</div><div><button class="btn">Hapus</button></div>`; row.querySelector('button').addEventListener('click', ()=>{ favs = favs.filter(x=>x!==id); localStorage.setItem(favKey,JSON.stringify(favs)); renderFavs(); }); el.appendChild(row); }); }
+
+function initMap(){
+  if(map) return;
+  map = L.map('map').setView([-7.4308,109.243],13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+  document.getElementById('map').style.display = 'block';
+}
+
+function requestLocationAndRender(){
+  if(!navigator.geolocation){ document.getElementById('locText').textContent = 'Tidak tersedia'; userLoc=null; doRender(); return; }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    userLoc = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+    document.getElementById('locText').textContent = userLoc.lat.toFixed(4) + ', ' + userLoc.lng.toFixed(4);
+    initMap();
+    const list = recommend();
+    render(list);
+  }, err=>{ document.getElementById('locText').textContent = 'Ditolak/Timeout'; userLoc=null; initMap(); const list = recommend(); render(list); }, {enableHighAccuracy:true,timeout:10000});
+}
+
+document.getElementById('apply').addEventListener('click', ()=>{ const list = recommend(); render(list); });
+document.getElementById('reset').addEventListener('click', ()=>{ document.getElementById('q').value=''; document.getElementById('foodType').value='all'; document.getElementById('minPrice').value=''; document.getElementById('maxPrice').value=''; document.getElementById('sortBy').value='distance'; userLoc=null; document.getElementById('locText').textContent='Mencari lokasi...'; render(PLACES.slice().sort((a,b)=> b.rating - a.rating)); });
+
+document.getElementById('useLoc').addEventListener('click', ()=>{ requestLocationAndRender(); });
+
+document.getElementById('q').addEventListener('input', ()=>{ const list = recommend(); render(list); });
+document.getElementById('foodType').addEventListener('change', ()=>{ const list = recommend(); render(list); });
+document.getElementById('sortBy').addEventListener('change', ()=>{ const list = recommend(); render(list); });
+
+document.getElementById('totalCount').textContent = PLACES.length;
+renderFavs();
+initMap();
+requestLocationAndRender();
+
+window._MP = {PLACES:PLACES, recommend:recommend, render:render, map:map};
+</script>
+</body>
+</html>

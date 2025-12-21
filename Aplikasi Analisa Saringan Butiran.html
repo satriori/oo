@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Analisis Saringan Butiran (Final)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f9;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 30px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        h1, h2 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .header {
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .header p {
+            text-align: center; /* Rata tengah */
+            margin: 5px 0 0;
+            color: #555;
+        }
+        input[type="number"], select {
+            padding: 6px;
+            width: 90px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        select {
+             width: 205px; /* Sesuaikan lebar untuk select */
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .input-group label {
+            width: 200px;
+            margin-bottom: 0;
+            font-weight: normal;
+        }
+        .input-section {
+            display: flex;
+            gap: 30px;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .input-column {
+            width: 48%;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #dddddd;
+            padding: 8px;
+            text-align: center;
+            font-size: 13px;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        .summary-box {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #ecf0f1;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        #chartContainer {
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #27ae60;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>🔬 Aplikasi Analisis Saringan Butiran (Sieve Analysis)</h1>
+        <p>Alat untuk menghitung distribusi ukuran butiran tanah/agregat dan menampilkan kurva gradasi.</p>
+    </div>
+
+    <div class="input-section">
+        <div class="input-column">
+            <h2>Data Input Eksperimen</h2>
+            <div class="input-group">
+                <label for="totalMass">Massa Sampel Awal (gram):</label>
+                <input type="number" id="totalMass" value="500" step="0.01">
+            </div>
+            
+            <div class="input-group">
+                <label for="analysisType">Pilih Jenis Analisis:</label>
+                <select id="analysisType" onchange="generateSieveInputs()">
+                    <option value="soil">Gradasi Tanah (Umum)</option>
+                    <option value="sand">Analisa Pasir (Agregat Halus)</option>
+                    <option value="gravel">Gradasi Kerikil (Agregat Kasar)</option>
+                    <option value="baseCourse">Lapis Pondasi (Base Course)</option>
+                    <option value="asphaltMix">Campuran Aspal</option>
+                </select>
+            </div>
+
+            <div class="input-group" style="margin-top: 5px;">
+                <label for="standardLimit">Pilih Batas Standar Gradasi:</label>
+                <select id="standardLimit" onchange="hitungAnalisis()">
+                    <option value="none">Tanpa Batas (Hanya Kurva Hasil)</option>
+                    <option value="astm_c33">ASTM C33 (Agregat Halus)</option>
+                    <option value="sni_z1">SNI 2000 Zona 1</option>
+                    <option value="sni_z2">SNI 2000 Zona 2</option>
+                    <option value="sni_z3">SNI 2000 Zona 3</option>
+                    <option value="sni_z4">SNI 2000 Zona 4</option>
+                </select>
+            </div>
+            
+            <p style="margin-top: 15px;"><strong>Masukkan Massa Tertinggal per Ayakan (gram):</strong></p>
+            <div id="sieveInputs">
+                </div>
+            
+            <button onclick="hitungAnalisis()">Hitung dan Gambar Kurva</button>
+        </div>
+        
+        <div class="input-column">
+            <h2>Hasil Perhitungan</h2>
+            <div class="summary-box">
+                Massa Total Tertinggal: <span id="massSum">0.00</span> gram
+                <br>
+                % Kehilangan/Error: <span id="errorPercent">0.00%</span>
+            </div>
+            
+            <table id="resultsTable">
+                </table>
+        </div>
+    </div>
+
+    <hr>
+    
+    <div id="chartContainer">
+        <h2>📊 Kurva Distribusi Ukuran Butiran (Kurva Gradasi)</h2>
+        <canvas id="sieveChart"></canvas>
+    </div>
+
+</div>
+
+<script>
+    // Data saringan telah diurutkan dari ukuran butiran (mm) TERBESAR ke TERKECIL, dengan Pan Dasar di paling bawah.
+    const sieveData = [
+        { sizeInch: '3.00', sizeValue: 76.2, isPan: false },
+        { sizeInch: '2.00', sizeValue: 50.8, isPan: false },
+        { sizeInch: '1.50', sizeValue: 38.1, isPan: false },
+        { sizeInch: '1.00', sizeValue: 25.4, isPan: false },
+        { sizeInch: '0.75', sizeValue: 19.05, isPan: false },
+        { sizeInch: '0.50', sizeValue: 12.7, isPan: false },
+        { sizeInch: '0.375', sizeValue: 9.52, isPan: false },
+        { sizeInch: '0.187', sizeValue: 4.75, isPan: false }, 
+        { sizeInch: '0.093', sizeValue: 2.36, isPan: false },
+        { sizeInch: '0.046', sizeValue: 1.18, isPan: false },
+        { sizeInch: '0.023', sizeValue: 0.60, isPan: false },
+        { sizeInch: '0.0117', sizeValue: 0.30, isPan: false },
+        { sizeInch: '0.0059', sizeValue: 0.15, isPan: false },
+        { sizeInch: '0.0029', sizeValue: 0.075, isPan: false },
+        // Pan Dasar diletakkan di posisi terakhir
+        { sizeInch: 'Pan Dasar', sizeValue: 0.00, isPan: true } 
+    ];
+
+    let chartInstance;
+
+    // --- DATA BATAS STANDAR (Persen Lolos Kumulatif) ---
+    // Key: sizeValue (mm)
+    const standardLimits = {
+        // ASTM C33 (Fine Aggregate)
+        astm_c33: {
+            // Ukuran Ayakan: [% Lolos Minimum, % Lolos Maksimum]
+            4.75: [95, 100], 
+            2.36: [80, 100],
+            1.18: [50, 85],
+            0.60: [25, 60],
+            0.30: [10, 30],
+            0.15: [2, 10],
+            0.075: [0, 5],
+        },
+        // SNI 2000 (Agregat Halus untuk Beton)
+        sni_z1: {
+            4.75: [90, 100], 
+            2.36: [70, 100],
+            1.18: [55, 90],
+            0.60: [35, 59],
+            0.30: [8, 30],
+            0.15: [0, 10],
+            0.075: [0, 3],
+        },
+        sni_z2: {
+            4.75: [90, 100], 
+            2.36: [75, 100],
+            1.18: [60, 95],
+            0.60: [30, 70],
+            0.30: [5, 25],
+            0.15: [0, 10],
+            0.075: [0, 3],
+        },
+        sni_z3: {
+            4.75: [90, 100], 
+            2.36: [80, 100],
+            1.18: [60, 95],
+            0.60: [20, 55],
+            0.30: [2, 15],
+            0.15: [0, 8],
+            0.075: [0, 3],
+        },
+        sni_z4: {
+            4.75: [90, 100], 
+            2.36: [85, 100],
+            1.18: [75, 100],
+            0.60: [15, 40],
+            0.30: [0, 10],
+            0.15: [0, 5],
+            0.075: [0, 3],
+        }
+    };
+
+    // Logika untuk menentukan default value berdasarkan jenis analisis
+    function getDefaultValue(sieve, analysisType) {
+        // Default umum: 0
+        let defaultValue = 0; 
+        
+        const size = sieve.sizeValue;
+
+        switch (analysisType) {
+            case 'sand': // Pasir (Agregat Halus) - Lebih banyak tertinggal di saringan kecil
+                if (size > 4.75) defaultValue = 0;
+                else if (size >= 2.36) defaultValue = 50;
+                else if (size >= 1.18) defaultValue = 100;
+                else if (size >= 0.60) defaultValue = 150;
+                else if (size >= 0.30) defaultValue = 100;
+                else if (size >= 0.15) defaultValue = 50;
+                else if (size > 0.075) defaultValue = 20;
+                else if (sieve.isPan) defaultValue = 30;
+                break;
+            case 'gravel': // Kerikil (Agregat Kasar) - Lebih banyak tertinggal di saringan besar
+                if (size > 38.1) defaultValue = 50;
+                else if (size >= 19.05) defaultValue = 150;
+                else if (size >= 9.52) defaultValue = 200;
+                else if (size >= 4.75) defaultValue = 50;
+                else if (size < 4.75 && !sieve.isPan) defaultValue = 0;
+                else if (sieve.isPan) defaultValue = 5;
+                break;
+            case 'baseCourse': // Lapis Pondasi - Gradasi yang baik (campuran besar dan kecil)
+                if (size > 25.4) defaultValue = 0;
+                else if (size >= 19.05) defaultValue = 50;
+                else if (size >= 9.52) defaultValue = 100;
+                else if (size >= 4.75) defaultValue = 150;
+                else if (size >= 0.60) defaultValue = 75;
+                else if (size > 0.075) defaultValue = 50;
+                else if (sieve.isPan) defaultValue = 75;
+                break;
+            case 'asphaltMix': // Campuran Aspal - Biasanya gradasi padat (dense)
+                if (size > 19.05) defaultValue = 0;
+                else if (size >= 12.7) defaultValue = 80;
+                else if (size >= 9.52) defaultValue = 120;
+                else if (size >= 4.75) defaultValue = 150;
+                else if (size >= 0.60) defaultValue = 100;
+                else if (size > 0.075) defaultValue = 30;
+                else if (sieve.isPan) defaultValue = 20;
+                break;
+            case 'soil': // Gradasi Tanah (Default Awal) - Distribusi umum
+            default:
+                if (sieve.isPan) {
+                    defaultValue = 30; 
+                } else if (size === 76.2) {
+                    defaultValue = 0;
+                } else if (size >= 9.52 && size <= 19.05) {
+                     defaultValue = 75;
+                } else if (size >= 4.75 && size < 9.52) {
+                     defaultValue = 150;
+                } else if (size < 4.75 && size > 0.075) {
+                     defaultValue = 20;
+                }
+                break;
+        }
+        return defaultValue;
+    }
+
+    function generateSieveInputs() {
+        const analysisType = document.getElementById('analysisType') ? document.getElementById('analysisType').value : 'soil';
+        const totalMassElement = document.getElementById('totalMass');
+        const inputDiv = document.getElementById('sieveInputs');
+        let html = '';
+        
+        // Atur Massa Sampel Awal (totalMass) berdasarkan tipe analisis
+        if (totalMassElement) {
+            if (analysisType === 'sand' || analysisType === 'soil') {
+                totalMassElement.value = '500'; // Umumnya lebih kecil untuk tanah/pasir
+            } else if (analysisType === 'gravel' || analysisType === 'baseCourse' || analysisType === 'asphaltMix') {
+                totalMassElement.value = '1500'; // Umumnya lebih besar untuk agregat kasar
+            }
+        }
+
+
+        sieveData.forEach((sieve, index) => {
+            
+            // Dapatkan nilai default baru
+            let defaultValue = getDefaultValue(sieve, analysisType); 
+
+            const labelText = sieve.isPan ? 
+                `**${sieve.sizeInch}**: ` : 
+                `**${sieve.sizeInch}"** (${sieve.sizeValue} mm):`;
+
+            html += `
+                <div class="input-group">
+                    <label for="sieve-${index}">${labelText}</label>
+                    <input type="number" id="sieve-${index}" data-size="${sieve.sizeValue}" value="${defaultValue}" step="0.01">
+                </div>
+            `;
+        });
+        inputDiv.innerHTML = html;
+        hitungAnalisis(); // Hitung ulang setelah input diperbarui
+    }
+    
+    window.onload = () => {
+        generateSieveInputs();
+    };
+
+    function hitungAnalisis() {
+        const totalMassInput = parseFloat(document.getElementById('totalMass').value);
+        
+        if (isNaN(totalMassInput) || totalMassInput <= 0) {
+            document.getElementById('massSum').textContent = '0.00';
+            document.getElementById('errorPercent').innerHTML = `<span style="color: #333;">0.00%</span>`;
+            displayResultsTable([]);
+            if (chartInstance) chartInstance.destroy();
+            return;
+        }
+
+        let massSum = 0;
+        const sieveValues = [];
+        
+        // 1. Ambil input massa tertinggal di setiap saringan dan Pan
+        sieveData.forEach((sieve, index) => {
+            const inputElement = document.getElementById(`sieve-${index}`);
+            let massRetained = parseFloat(inputElement.value) || 0;
+            sieveValues.push({
+                ...sieve,
+                massRetained: massRetained
+            });
+            massSum += massRetained;
+        });
+        
+        document.getElementById('massSum').textContent = massSum.toFixed(2);
+        
+        // Hitung persentase error
+        const errorMass = massSum - totalMassInput;
+        const errorPercent = (errorMass / totalMassInput) * 100;
+        
+        // Berikan warna pada error
+        let errorColor = '#333';
+        if (Math.abs(errorPercent) > 5) {
+            errorColor = '#c0392b'; 
+        } else if (Math.abs(errorPercent) > 2) {
+             errorColor = '#f39c12'; 
+        }
+        
+        document.getElementById('errorPercent').innerHTML = `<span style="color: ${errorColor};">${errorPercent.toFixed(2)}%</span>`;
+        
+        // Urutkan data berdasarkan ukuran saringan (sizeValue) dari TERBESAR ke TERKECIL untuk PERHITUNGAN KUMULATIF yang benar
+        const sortedSieveValues = sieveValues.slice().sort((a, b) => b.sizeValue - a.sizeValue);
+
+        // 2. Perhitungan Persentase
+        let cumulativeRetainedMass = 0;
+
+        const results = sortedSieveValues.map(sieve => {
+            
+            // Persentase dihitung berdasarkan Massa Total Tertinggal (massSum)
+            const percentRetained = (sieve.massRetained / massSum) * 100;
+            cumulativeRetainedMass += sieve.massRetained;
+            const percentCumulativeRetained = (cumulativeRetainedMass / massSum) * 100;
+
+            // Logika khusus untuk Pan: Persen Lolos harus 0%
+            const percentPassing = sieve.isPan ? 0.00 : 100 - percentCumulativeRetained;
+            
+            return {
+                ...sieve,
+                percentRetained: percentRetained,
+                percentCumulativeRetained: percentCumulativeRetained,
+                percentPassing: percentPassing
+            };
+        });
+
+        // 3. Tampilkan Hasil di Tabel
+        const panIndex = results.findIndex(res => res.isPan);
+        const panData = panIndex !== -1 ? results.splice(panIndex, 1)[0] : null;
+        
+        const resultsForDisplay = results; 
+        if (panData) {
+            resultsForDisplay.push(panData); // Tambahkan Pan Dasar ke posisi terakhir
+        }
+
+        displayResultsTable(resultsForDisplay);
+        
+        // 4. Buat Grafik, sekarang termasuk batas standar
+        const selectedLimit = document.getElementById('standardLimit') ? document.getElementById('standardLimit').value : 'none';
+        createSieveChart(results, selectedLimit); 
+    }
+
+    function displayResultsTable(results) {
+        const table = document.getElementById('resultsTable');
+        let html = `
+            <thead>
+                <tr>
+                    <th>Ayakan (Inci/Nama)</th>
+                    <th>Bukaan Ayakan (mm)</th>
+                    <th>Massa Tertinggal (gr)</th>
+                    <th>% Tertinggal</th>
+                    <th>% Tertinggal Kumulatif</th>
+                    <th>% Lolos Kumulatif</th>
+                </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        if (results.length === 0) {
+            html += `<tr><td colspan="6">Masukkan Massa Sampel Awal yang valid untuk melihat hasil.</td></tr>`;
+        } else {
+            results.forEach(res => {
+                const nameCell = res.isPan ? 
+                    `<td style="text-align: center; font-weight: bold; background-color: #f0f0f0;">${res.sizeInch}</td>` : 
+                    `<td style="text-align: center; font-weight: bold;">${res.sizeInch}"</td>`;
+                
+                const sizeCell = res.isPan ? 
+                    '<td>0.000</td>' : 
+                    `<td>${res.sizeValue.toFixed(3)}</td>`;
+                
+                html += `
+                    <tr>
+                        ${nameCell}
+                        ${sizeCell}
+                        <td>${res.massRetained.toFixed(2)}</td>
+                        <td>${res.percentRetained.toFixed(2)}%</td>
+                        <td>${res.percentCumulativeRetained.toFixed(2)}%</td>
+                        <td>${res.percentPassing.toFixed(2)}%</td>
+                    </tr>
+                `;
+            });
+        }
+        
+        html += '</tbody>';
+        table.innerHTML = html;
+    }
+
+    function createSieveChart(results, selectedLimit) {
+        const ctx = document.getElementById('sieveChart').getContext('2d');
+        
+        const sieveSizes = sieveData
+            .filter(sieve => !sieve.isPan)
+            .map(sieve => sieve.sizeValue);
+
+        // Data Kurva Hasil Analisis
+        const primaryChartData = results
+            .filter(res => res.sizeValue > 0) 
+            .map(res => ({
+                x: res.sizeValue,
+                y: res.percentPassing 
+            }));
+        
+        primaryChartData.sort((a, b) => a.x - b.x); // Urutkan dari sizeValue terkecil
+
+        const datasets = [{
+            label: '% Lolos Kumulatif (Kurva Hasil)',
+            data: primaryChartData,
+            borderColor: 'rgb(54, 162, 235)',
+            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            fill: false,
+            tension: 0.3,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            borderWidth: 3
+        }];
+        
+        // Tambahkan Batas Standar jika dipilih
+        if (selectedLimit !== 'none' && standardLimits[selectedLimit]) {
+            const limitData = standardLimits[selectedLimit];
+            const sizeValues = Object.keys(limitData).map(Number).sort((a, b) => a - b);
+            
+            const lowerLimitData = sizeValues.map(size => ({
+                x: size,
+                y: limitData[size][0] // Persen Lolos Minimum
+            }));
+
+            const upperLimitData = sizeValues.map(size => ({
+                x: size,
+                y: limitData[size][1] // Persen Lolos Maksimum
+            }));
+
+            datasets.push({
+                label: 'Batas Bawah Standar',
+                data: lowerLimitData,
+                borderColor: 'rgba(255, 99, 132, 0.8)', // Merah Muda
+                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                fill: '+1', // Mengisi area antara batas atas dan batas bawah
+                tension: 0,
+                pointRadius: 0,
+                borderDash: [5, 5],
+                borderWidth: 1.5,
+                stepped: true
+            });
+
+            datasets.push({
+                label: 'Batas Atas Standar',
+                data: upperLimitData,
+                borderColor: 'rgba(255, 99, 132, 0.8)',
+                backgroundColor: 'transparent',
+                fill: false,
+                tension: 0,
+                pointRadius: 0,
+                borderDash: [5, 5],
+                borderWidth: 1.5,
+                stepped: true
+            });
+        }
+
+
+        if (chartInstance) {
+            chartInstance.destroy();
+        }
+
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        type: 'logarithmic',
+                        title: {
+                            display: true,
+                            text: 'Ukuran Ayakan (mm) [Skala Logaritmik]'
+                        },
+                        min: 0.01, 
+                        max: 100,
+                        ticks: {
+                            callback: function(value, index, values) {
+                                // Tampilkan label hanya untuk nilai-nilai saringan yang penting
+                                if (sieveSizes.includes(value)) {
+                                    return value.toFixed(3).replace(/\.?0+$/, '');
+                                }
+                                return null;
+                            }
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Persentase Lolos Kumulatif (%)'
+                        },
+                        min: 0,
+                        max: 100
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true
+                    },
+                    title: {
+                        display: true,
+                        text: 'Kurva Distribusi Ukuran Butiran'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                const size = context[0].raw.x;
+                                return `Ayakan: ${size.toFixed(3)} mm`;
+                            },
+                            label: function(context) {
+                                return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
